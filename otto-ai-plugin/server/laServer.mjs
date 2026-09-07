@@ -13517,6 +13517,11 @@ import { mkdirSync as mkdirSync2, readFileSync as readFileSync2, writeFileSync a
 import { createServer } from "node:http";
 import path3 from "node:path";
 
+// dist/lib/terms.js
+var TERMS_AND_CONDITIONS = "This is a trial product currently undergoing development. It is provided as is with no guarantees of any kind. By clicking to continue, you agree to these terms, which includes a full and complete waiver of any claims related to the product\u2019s functioning or failure to function. I understand that I am using this at my own risk. Clix Marketing, Inc. is not responsible for any errors, damages, bugs, losses, or other injuries related to the use of this product currently under development. You understand that your access to this product is optional, may be terminated at any time, and that ongoing use of the product will require a separate agreement and / or payment of fees";
+var TERMS_FIELD_ACCEPTED = "accepted";
+var TERMS_NOT_ACCEPTED_MESSAGE = "You must accept the terms and conditions to continue.";
+
 // dist/la/errors.js
 var LaError = class extends Error {
   status;
@@ -13674,6 +13679,12 @@ var page = (body) => `<!doctype html><html lang="en"><head><meta charset="utf-8"
   .err{background:#fdecea;border:1px solid #f5c6c0;border-radius:8px;padding:10px 12px;font-size:13px;
        color:#8a2018;margin-top:16px}
   .ok{font-size:15px;color:#1c6b30}
+  .terms{border:1px solid #ccc9bd;border-radius:8px;background:#faf9f5;padding:12px;margin-top:18px;
+         max-height:160px;overflow-y:auto;font-size:12px;line-height:1.5;color:#555}
+  .terms h2{font-size:13px;margin:0 0 6px;color:#1a1a18}
+  .agree{display:flex;gap:8px;align-items:flex-start;margin-top:12px;font-size:13px;font-weight:400;
+         line-height:1.4;cursor:pointer}
+  .agree input{width:auto;margin-top:2px}
 </style></head><body><div class="card">${body}</div></body></html>`;
 var formPage = (token, error2) => page(`<h1>Connect LimoAnywhere</h1>
 <p>Enter the same three things you type at manage.mylimobiz.com. This page is served
@@ -13688,6 +13699,14 @@ ${error2 ? `<div class="err">${escapeHtml(error2)}</div>` : ""}
   <input id="username" name="username" autocomplete="username" required>
   <label for="password">Password</label>
   <input id="password" name="password" type="password" autocomplete="current-password" required>
+  <div class="terms">
+    <h2>Terms &amp; Conditions</h2>
+    ${escapeHtml(TERMS_AND_CONDITIONS)}
+  </div>
+  <label class="agree">
+    <input type="checkbox" name="terms" value="${TERMS_FIELD_ACCEPTED}" required>
+    I have read and agree to the terms and conditions above.
+  </label>
   <button type="submit">Verify and connect</button>
 </form>`);
 var successPage = () => page(`<h1>Connected \u2713</h1>
@@ -13734,6 +13753,9 @@ function createSetupHttpServer(token, onSuccess) {
         const form = new URLSearchParams(await readBody(req));
         if (!tokenOk(form.get("token")))
           return send(403, expiredPage());
+        if (form.get("terms") !== TERMS_FIELD_ACCEPTED) {
+          return send(400, formPage(token, TERMS_NOT_ACCEPTED_MESSAGE));
+        }
         const companyId = (form.get("company_id") ?? "").trim();
         const username = (form.get("username") ?? "").trim();
         const password = form.get("password") ?? "";
@@ -13884,6 +13906,7 @@ import { homedir as homedir2 } from "node:os";
 import path4 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 import { gunzipSync } from "node:zlib";
+import { hostname as hostname2 } from "node:os";
 var MARKETPLACE_REPO = "Booked-Rides/otto-ai-marketplace";
 var PLUGIN_NAME = "otto-ai-plugin";
 var MARKETPLACE_KEY = "otto-ai-marketplace";
@@ -13891,6 +13914,10 @@ var FETCH_TIMEOUT_MS = 5e3;
 var RESTART_HOWTO = "The new version takes effect after Claude Desktop is FULLY quit and reopened (Mac: Cmd+Q; Windows: right-click the Claude tray icon near the clock and choose Exit) \u2014 until then the current version keeps running.";
 var manifestUrl = () => process.env.MILES_UPDATE_MANIFEST_URL?.trim() || `https://raw.githubusercontent.com/${MARKETPLACE_REPO}/main/.claude-plugin/marketplace.json`;
 var tarballUrl = () => process.env.MILES_UPDATE_TARBALL_URL?.trim() || `https://codeload.github.com/${MARKETPLACE_REPO}/tar.gz/refs/heads/main`;
+var heartbeatUrl = () => {
+  const fromEnv = process.env.MILES_UPDATE_PING_URL;
+  return fromEnv === void 0 ? "https://miles-ai-production.up.railway.app/plugin/heartbeat" : fromEnv.trim();
+};
 var claudePluginsDir = () => process.env.MILES_CLAUDE_PLUGINS_DIR?.trim() || path4.join(homedir2(), ".claude", "plugins");
 var readJson = (file) => {
   try {
@@ -13936,6 +13963,30 @@ async function fetchLatestVersion() {
     if (!res.ok)
       return void 0;
     return versionFromMarketplaceManifest(await res.json());
+  } catch {
+    return void 0;
+  }
+}
+async function pingHeartbeat(installed) {
+  const url = heartbeatUrl();
+  if (!url)
+    return void 0;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        plugin_version: installed,
+        company_id: readCredentialsFile()?.companyId ?? "",
+        host: hostname2(),
+        platform: process.platform
+      }),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
+    });
+    if (!res.ok)
+      return void 0;
+    const latest = (await res.json()).latest;
+    return typeof latest === "string" && latest ? latest : void 0;
   } catch {
     return void 0;
   }
@@ -14065,7 +14116,7 @@ async function computeNotice() {
     const installed = installedPluginVersion();
     if (!installed)
       return void 0;
-    const latest = await fetchLatestVersion();
+    const latest = await pingHeartbeat(installed) ?? await fetchLatestVersion();
     if (!latest || compareVersions(latest, installed) <= 0)
       return void 0;
     if (autoUpdateEnabled()) {
@@ -25255,6 +25306,8 @@ var laConnectStartTool = {
       "Give the operator that link and have them open it in a browser on this machine.",
       "It's served by the Otto AI plugin itself, so the login goes straight from",
       "their browser to a file on this machine \u2014 never through this chat.",
+      "The page shows the trial terms and conditions, which they must accept",
+      "before the login is taken.",
       `The link expires in ${expiresMinutes} minutes or after one successful connection`,
       "(call la_connect_start again for a fresh one).",
       "Once they've submitted, run la_check_connection to confirm."
@@ -25264,15 +25317,31 @@ var laConnectStartTool = {
 var laConnectTool = {
   name: "la_connect",
   title: "Connect LimoAnywhere (fallback)",
-  description: "Fallback LimoAnywhere setup \u2014 prefer la_connect_start, which keeps the password out of this conversation. Takes the same three fields as the manage.mylimobiz.com login form, verifies them with LimoAnywhere first \u2014 nothing is saved if the login is rejected \u2014 and saves them on this machine, working immediately with no restart. The saved login is never sent to Limo Marketer. Use only when the operator can't open the la_connect_start page.",
+  description: "Fallback LimoAnywhere setup \u2014 prefer la_connect_start, which keeps the password out of this conversation. Takes the same three fields as the manage.mylimobiz.com login form, verifies them with LimoAnywhere first \u2014 nothing is saved if the login is rejected \u2014 and saves them on this machine, working immediately with no restart. The saved login is never sent to Limo Marketer. Use only when the operator can't open the la_connect_start page. The operator must accept the trial terms and conditions first: call the tool once without accept_terms to get the terms text, show it to them verbatim, and set accept_terms only after they explicitly agree.",
   kind: "setup",
   inputSchema: {
     company_id: external_exports.string().describe("Company ID \u2014 the first field of the LimoAnywhere login form"),
     username: external_exports.string().describe("LimoAnywhere username"),
-    password: external_exports.string().describe("LimoAnywhere password (stored only in a file on this machine)")
+    password: external_exports.string().describe("LimoAnywhere password (stored only in a file on this machine)"),
+    accept_terms: external_exports.boolean().optional().describe("Set true only after the operator has been shown the terms and conditions and explicitly agreed to them")
   },
-  logArgs: (args) => ({ company_id: args.company_id }),
+  logArgs: (args) => ({ company_id: args.company_id, accept_terms: args.accept_terms }),
   handler: async (_deps, args) => {
+    if (args.accept_terms !== true) {
+      return [
+        "Before connecting, the operator must read and accept the trial terms and",
+        "conditions. Show them this text verbatim:",
+        `
+
+---
+${TERMS_AND_CONDITIONS}
+---
+
+`,
+        "Nothing was verified or saved. If \u2014 and only if \u2014 they explicitly agree,",
+        "call la_connect again with the same login plus accept_terms: true."
+      ].join(" ");
+    }
     const companyId = String(args.company_id ?? "").trim();
     const username = String(args.username ?? "").trim();
     const password = String(args.password ?? "");

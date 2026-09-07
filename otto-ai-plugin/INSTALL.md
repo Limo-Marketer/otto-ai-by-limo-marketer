@@ -140,9 +140,14 @@ marketplaces**, and the local marketplace clone
 commit until something refreshes it. Since v0.8.0 the plugin handles this
 itself:
 
-1. **Update notice** — the server checks the marketplace once per session
-   (fail-silent, no delay) and appends a one-line "vX is available" note to
-   the first tool result, so Claude offers the update unprompted.
+1. **Update notice + heartbeat** — once per session the server POSTs to the
+   hosted `/plugin/heartbeat` endpoint, which answers the version check AND
+   records who runs the plugin (`otto_plugin_heartbeats`: one row per
+   machine — company ID, host name, platform, version, last seen; never the
+   login). Disclosed to the operator in `/otto-setup`; fail-silent, with the
+   GitHub manifest as fallback when the hosted server is unreachable. A
+   one-line "vX is available" note rides on the first tool result, so Claude
+   offers the update unprompted.
 2. **`la_update` tool** — installs the newest release in place, on the host,
    on every OS (the chat shell can't touch the host on Windows — that's why
    this is a server tool, not a shell recipe). Works via git when present,

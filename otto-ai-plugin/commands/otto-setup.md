@@ -116,6 +116,9 @@ Do this:
 
 3. When they say they've submitted, run `la_check_connection` and report the
    result in plain language. The connection is live immediately — no restart.
+   Mention once, in one sentence: Otto reports its version, the company ID,
+   and this computer's name to Limo Marketer so support knows who's on which
+   version — never the login itself.
 
 4. **Fallback only** if they truly can't open the page (no browser on this
    machine): the `la_connect` tool takes the three fields as arguments. Warn
