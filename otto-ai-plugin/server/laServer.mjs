@@ -10298,13 +10298,13 @@ function _array(Class2, element, params) {
   });
 }
 function _custom(Class2, fn, _params) {
-  const norm3 = normalizeParams(_params);
-  norm3.abort ?? (norm3.abort = true);
+  const norm = normalizeParams(_params);
+  norm.abort ?? (norm.abort = true);
   const schema = new Class2({
     type: "custom",
     check: "custom",
     fn,
-    ...norm3
+    ...norm
   });
   return schema;
 }
@@ -13907,9 +13907,10 @@ import path4 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 import { gunzipSync } from "node:zlib";
 import { hostname as hostname2 } from "node:os";
-var MARKETPLACE_REPO = "Booked-Rides/otto-ai-marketplace";
+var MARKETPLACE_REPO = "Limo-Marketer/otto-ai-by-limo-marketer";
 var PLUGIN_NAME = "otto-ai-plugin";
-var MARKETPLACE_KEY = "otto-ai-marketplace";
+var LEGACY_MARKETPLACE_KEYS = ["Limo-Marketer/otto-ai-plugin", "otto-ai-marketplace"];
+var MARKETPLACE_KEYS = [MARKETPLACE_REPO, ...LEGACY_MARKETPLACE_KEYS];
 var FETCH_TIMEOUT_MS = 5e3;
 var RESTART_HOWTO = "The new version takes effect after Claude Desktop is FULLY quit and reopened (Mac: Cmd+Q; Windows: right-click the Claude tray icon near the clock and choose Exit) \u2014 until then the current version keeps running.";
 var manifestUrl = () => process.env.MILES_UPDATE_MANIFEST_URL?.trim() || `https://raw.githubusercontent.com/${MARKETPLACE_REPO}/main/.claude-plugin/marketplace.json`;
@@ -14004,7 +14005,7 @@ function setAutoUpdate(enabled) {
 var gitAvailable = () => spawnSync("git", ["--version"], { stdio: "ignore" }).status === 0;
 var refreshWithGit = (cloneDir) => {
   const run = (args) => spawnSync("git", args, { cwd: cloneDir, stdio: "ignore" }).status === 0;
-  return run(["fetch", "--depth", "1", "origin", "main"]) && run(["reset", "--hard", "origin/main"]);
+  return run(["fetch", "--depth", "1", `https://github.com/${MARKETPLACE_REPO}.git`, "main"]) && run(["reset", "--hard", "FETCH_HEAD"]);
 };
 var headerString = (buf, start, len) => buf.toString("utf8", start, start + len).replace(/\0[\s\S]*$/, "");
 function extractRepoTarball(tarGz, destDir) {
@@ -14062,7 +14063,7 @@ var marketplaceCloneDir = () => {
   for (const entry of Object.values(known)) {
     const e = entry;
     const src = `${e.source?.url ?? ""} ${e.source?.repo ?? ""}`;
-    if (src.includes(MARKETPLACE_KEY) && e.installLocation)
+    if (MARKETPLACE_KEYS.some((k) => src.includes(k)) && e.installLocation)
       return e.installLocation;
   }
   return void 0;
@@ -14072,7 +14073,7 @@ var installedEntries = () => {
   const plugins = file?.plugins ?? {};
   return Object.entries(plugins).filter(([, v]) => Array.isArray(v)).map(([key, entries]) => ({ key, entries }));
 };
-var ADD_MARKETPLACE_HOWTO = 'In Claude Desktop, open Customize -> Plugins -> Add marketplace, enter Booked-Rides/otto-ai-marketplace, then install "Otto AI by Limo Marketer". The saved LimoAnywhere login survives a reinstall.';
+var ADD_MARKETPLACE_HOWTO = `In Claude Desktop, open Customize -> Plugins -> Add marketplace, enter ${MARKETPLACE_REPO}, then install "Otto AI by Limo Marketer". The saved LimoAnywhere login survives a reinstall.`;
 async function applyUpdate() {
   const installed = installedPluginVersion();
   if (!installed) {
@@ -22233,2744 +22234,53 @@ var EMPTY_COMPLETION_RESULT = {
   }
 };
 
-// dist/lib/pendingActions.js
-import { createHash, randomInt } from "node:crypto";
-
-// dist/db/supabase.js
-var SupabaseDbError = class extends Error {
-  status;
-  body;
-  constructor(status, body, context) {
-    super(`Supabase request failed (HTTP ${status}) during ${context}`);
-    this.status = status;
-    this.body = body;
-  }
-};
-function eq(field, value) {
-  return `${field}=eq.${encodeURIComponent(value)}`;
-}
-function headers(db, extra = {}) {
-  return {
-    apikey: db.serviceKey,
-    Authorization: `Bearer ${db.serviceKey}`,
-    "Content-Type": "application/json",
-    ...extra
-  };
-}
-async function parseRows(res, context) {
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new SupabaseDbError(res.status, body, context);
-  }
-  return await res.json();
-}
-async function sbSelect(db, table, query) {
-  const res = await fetch(`${db.url}/rest/v1/${table}?${query}`, { headers: headers(db) });
-  return parseRows(res, `select from ${table}`);
-}
-async function sbInsert(db, table, rows) {
-  const res = await fetch(`${db.url}/rest/v1/${table}`, {
-    method: "POST",
-    headers: headers(db, { Prefer: "return=representation" }),
-    body: JSON.stringify(rows)
+// dist/server/mcp.js
+function buildMcpServer(cfg, onToolCall, opts) {
+  const server = new McpServer({
+    name: opts.name ?? "otto-ai-mcp",
+    title: opts.title ?? "Otto AI",
+    version: "0.1.0"
+  }, {
+    instructions: opts.instructions
   });
-  return parseRows(res, `insert into ${table}`);
-}
-async function sbPatch(db, table, query, patch) {
-  const res = await fetch(`${db.url}/rest/v1/${table}?${query}`, {
-    method: "PATCH",
-    headers: headers(db, { Prefer: "return=representation" }),
-    body: JSON.stringify(patch)
-  });
-  return parseRows(res, `update ${table}`);
-}
-
-// dist/ghl/marketplaceVault.js
-var LOCATIONS_TABLE = "otto_ghl_tokens";
-var COMPANY_TABLE = "otto_ghl_company_tokens";
-var EXPIRY_MARGIN_MS = 2 * 60 * 1e3;
-async function ghlTokenRequest(apiBase, app, grant) {
-  const res = await fetch(`${apiBase}/oauth/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-    body: new URLSearchParams({
-      client_id: app.clientId,
-      client_secret: app.clientSecret,
-      ...grant
-    }).toString()
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`GHL token request failed (HTTP ${res.status}): ${body.slice(0, 200)}`);
-  }
-  return await res.json();
-}
-async function upsertLocationRow(db, row) {
-  const updated = await sbPatch(db, LOCATIONS_TABLE, eq("location_id", String(row.location_id)), row);
-  if (updated.length === 0)
-    await sbInsert(db, LOCATIONS_TABLE, row);
-}
-async function getCompanyToken(db, apiBase, app) {
-  const rows = await sbSelect(db, COMPANY_TABLE, "select=*&limit=2");
-  if (rows.length === 0) {
-    throw new Error("The Otto AI app isn't installed for this agency yet \u2014 please contact Limo Marketer support to finish setup.");
-  }
-  if (rows.length > 1) {
-    throw new Error("Multiple agency connections found \u2014 contact Limo Marketer support.");
-  }
-  const row = rows[0];
-  if (new Date(row.expires_at).getTime() - Date.now() > EXPIRY_MARGIN_MS) {
-    return { companyId: row.company_id, token: row.access_token };
-  }
-  const refreshed = await ghlTokenRequest(apiBase, app, {
-    grant_type: "refresh_token",
-    refresh_token: row.refresh_token
-  });
-  const won = await sbPatch(db, COMPANY_TABLE, `${eq("company_id", row.company_id)}&${eq("refresh_token", row.refresh_token)}`, {
-    access_token: refreshed.access_token,
-    refresh_token: refreshed.refresh_token ?? row.refresh_token,
-    expires_at: new Date(Date.now() + refreshed.expires_in * 1e3).toISOString(),
-    updated_at: (/* @__PURE__ */ new Date()).toISOString()
-  });
-  if (won.length > 0)
-    return { companyId: row.company_id, token: refreshed.access_token };
-  const latest = await sbSelect(db, COMPANY_TABLE, `${eq("company_id", row.company_id)}&limit=1`);
-  if (!latest[0])
-    throw new Error("The agency connection was removed mid-request \u2014 please try again.");
-  return { companyId: latest[0].company_id, token: latest[0].access_token };
-}
-async function mintLocationToken(db, apiBase, app, locationId) {
-  const company = await getCompanyToken(db, apiBase, app);
-  const res = await fetch(`${apiBase}/oauth/locationToken`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${company.token}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-      Version: "2021-07-28",
-      Accept: "application/json"
-    },
-    body: new URLSearchParams({ companyId: company.companyId, locationId }).toString()
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(res.status < 500 ? "The Otto AI app isn't installed on this GoHighLevel account yet \u2014 please contact Limo Marketer support to finish setup." : `GHL location token mint failed (HTTP ${res.status}): ${body.slice(0, 200)}`);
-  }
-  const minted = await res.json();
-  const expiresAtMs = Date.now() + minted.expires_in * 1e3;
-  await upsertLocationRow(db, {
-    location_id: locationId,
-    company_id: company.companyId,
-    access_token: minted.access_token,
-    refresh_token: null,
-    expires_at: new Date(expiresAtMs).toISOString(),
-    scopes: minted.scope ?? null,
-    updated_at: (/* @__PURE__ */ new Date()).toISOString()
-  });
-  return { token: minted.access_token, expiresAtMs };
-}
-async function resolveMarketplaceToken(db, apiBase, app, locationId) {
-  const rows = await sbSelect(db, LOCATIONS_TABLE, `${eq("location_id", locationId)}&limit=1`);
-  const row = rows[0];
-  if (row) {
-    const expiresAtMs = new Date(row.expires_at).getTime();
-    if (expiresAtMs - Date.now() > EXPIRY_MARGIN_MS) {
-      return { token: row.access_token, expiresAtMs };
-    }
-    if (row.refresh_token) {
-      return refreshLocationToken(db, apiBase, app, row);
-    }
-  }
-  return mintLocationToken(db, apiBase, app, locationId);
-}
-async function refreshLocationToken(db, apiBase, app, row) {
-  const refreshed = await ghlTokenRequest(apiBase, app, {
-    grant_type: "refresh_token",
-    refresh_token: row.refresh_token,
-    user_type: "Location"
-  });
-  const expiresAtMs = Date.now() + refreshed.expires_in * 1e3;
-  const won = await sbPatch(db, LOCATIONS_TABLE, `${eq("location_id", row.location_id)}&${eq("refresh_token", row.refresh_token)}`, {
-    access_token: refreshed.access_token,
-    refresh_token: refreshed.refresh_token ?? null,
-    expires_at: new Date(expiresAtMs).toISOString(),
-    updated_at: (/* @__PURE__ */ new Date()).toISOString()
-  });
-  if (won.length > 0)
-    return { token: refreshed.access_token, expiresAtMs };
-  const latest = await sbSelect(db, LOCATIONS_TABLE, `${eq("location_id", row.location_id)}&limit=1`);
-  if (!latest[0])
-    throw new Error("The GoHighLevel connection was removed mid-request \u2014 please try again.");
-  return { token: latest[0].access_token, expiresAtMs: new Date(latest[0].expires_at).getTime() };
-}
-
-// dist/ghl/tokenSource.js
-var MAX_CACHE_ENTRIES = 500;
-var cache = /* @__PURE__ */ new Map();
-function clearTokenCache(locationId) {
-  if (locationId !== void 0)
-    cache.delete(locationId);
-  else
-    cache.clear();
-}
-function vaultUnreachableMessage(cfg) {
-  return cfg.mode === "stdio" ? "Couldn't reach the local token vault. Is the local Supabase running? (npx supabase start in the limo-platform folder)" : "The connection to GoHighLevel is temporarily unavailable \u2014 please try again in a minute.";
-}
-function tokenMissingMessage(cfg) {
-  return cfg.mode === "stdio" ? `No marketplace token for location ${cfg.locationId} in the local vault. Re-run the token seed script to refresh it.` : "Your GoHighLevel connection isn't active yet \u2014 please contact Limo Marketer support.";
-}
-function tokenExpiredMessage(cfg) {
-  return cfg.mode === "stdio" ? "The local marketplace token for this location has expired (they last ~24 hours). Re-run the token seed script to refresh it." : "The connection to GoHighLevel is being refreshed \u2014 please try again in a minute.";
-}
-async function resolveGhlToken(cfg) {
-  if (cfg.marketplace && cfg.vault && cfg.locationId) {
-    const cached3 = cache.get(cfg.locationId);
-    if (cached3 && cached3.expiresAtMs - Date.now() > 2 * 60 * 1e3) {
-      return { source: "otto-vault", token: cached3.token, expiresAtMs: cached3.expiresAtMs };
-    }
-    const { token, expiresAtMs: expiresAtMs2 } = await resolveMarketplaceToken({ url: cfg.vault.url, serviceKey: cfg.vault.key }, cfg.apiBase, cfg.marketplace, cfg.locationId);
-    storeInCache(cfg.locationId, token, expiresAtMs2);
-    return { source: "otto-vault", token, expiresAtMs: expiresAtMs2 };
-  }
-  if (cfg.ghlPit)
-    return { source: "pit", token: cfg.ghlPit };
-  if (!cfg.vault) {
-    throw new Error("No GoHighLevel credential configured. Set GHL_PRIVATE_INTEGRATION_TOKEN, or MILES_TOKEN_DB_URL + MILES_TOKEN_DB_KEY for the local token vault.");
-  }
-  if (!cfg.locationId) {
-    throw new Error("A GoHighLevel location is required to use the token vault.");
-  }
-  const cached2 = cache.get(cfg.locationId);
-  if (cached2 && cached2.expiresAtMs - Date.now() > 2 * 60 * 1e3) {
-    return { source: "local-vault", token: cached2.token, expiresAtMs: cached2.expiresAtMs };
-  }
-  const url = `${cfg.vault.url}/rest/v1/ghl_oauth_tokens?resource_id=eq.${encodeURIComponent(cfg.locationId)}&resource_type=eq.location&select=access_token,expires_at&limit=1`;
-  let res;
-  try {
-    res = await fetch(url, {
-      headers: { apikey: cfg.vault.key, Authorization: `Bearer ${cfg.vault.key}` }
-    });
-  } catch {
-    throw new Error(vaultUnreachableMessage(cfg));
-  }
-  if (!res.ok) {
-    throw new Error(`Token vault query failed (HTTP ${res.status}).`);
-  }
-  const rows = await res.json();
-  const row = rows[0];
-  if (!row) {
-    throw new Error(tokenMissingMessage(cfg));
-  }
-  const expiresAtMs = new Date(row.expires_at).getTime();
-  if (expiresAtMs - Date.now() < 60 * 1e3) {
-    throw new Error(tokenExpiredMessage(cfg));
-  }
-  storeInCache(cfg.locationId, row.access_token, expiresAtMs);
-  return { source: "local-vault", token: row.access_token, expiresAtMs };
-}
-function storeInCache(locationId, token, expiresAtMs) {
-  if (cache.size >= MAX_CACHE_ENTRIES) {
-    const oldest = cache.keys().next().value;
-    if (oldest !== void 0)
-      cache.delete(oldest);
-  }
-  cache.set(locationId, { token, expiresAtMs });
-}
-
-// dist/ghl/client.js
-var GHL_API_VERSION = "2021-07-28";
-var GhlError = class extends Error {
-  status;
-  body;
-  constructor(status, body, path5) {
-    super(`GoHighLevel API error ${status} on ${path5}`);
-    this.status = status;
-    this.body = body;
-  }
-  /** A short, non-developer-friendly explanation of what likely went wrong. */
-  friendly() {
-    if (this.status === 401) {
-      return "GoHighLevel rejected the token (401). The Private Integration Token in .env is probably wrong, expired, or was pasted with extra spaces.";
-    }
-    if (this.status === 403) {
-      return "GoHighLevel said access is forbidden (403). The token is valid but is missing a permission scope \u2014 re-open the Private Integration in GHL and make sure all the View scopes listed in .env are checked.";
-    }
-    if (this.status === 404) {
-      return "GoHighLevel couldn't find that resource (404). Double-check the GHL_LOCATION_ID in .env.";
-    }
-    if (this.status === 429) {
-      return "GoHighLevel rate limit reached (429). Wait a minute and try again.";
-    }
-    return `GoHighLevel returned an unexpected error (${this.status}). Details: ${this.body.slice(0, 300)}`;
-  }
-};
-async function ghlFetch(cfg, apiPath, opts = {}) {
-  const url = new URL(apiPath, cfg.apiBase);
-  for (const [k, v] of Object.entries(opts.query ?? {})) {
-    if (v !== void 0)
-      url.searchParams.set(k, String(v));
-  }
-  const doFetch = async () => {
-    const { token } = await resolveGhlToken(cfg);
-    return fetch(url, {
-      method: opts.method ?? "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Version: opts.version ?? GHL_API_VERSION,
-        Accept: "application/json",
-        ...opts.body !== void 0 ? { "Content-Type": "application/json" } : {}
-      },
-      body: opts.body !== void 0 ? JSON.stringify(opts.body) : void 0
-    });
-  };
-  let res = await doFetch();
-  if (res.status === 429) {
-    const wait = Number(res.headers.get("Retry-After")) || 10;
-    await new Promise((r) => setTimeout(r, Math.min(wait, 30) * 1e3));
-    res = await doFetch();
-  }
-  if (res.status === 401 && !cfg.ghlPit) {
-    clearTokenCache(cfg.locationId);
-    res = await doFetch();
-  }
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new GhlError(res.status, text, apiPath);
-  }
-  return await res.json();
-}
-var CallBudget = class {
-  limit;
-  used = 0;
-  constructor(limit) {
-    this.limit = limit;
-  }
-  /** Reserves n calls; false means the budget is spent — stop scanning. */
-  take(n = 1) {
-    if (this.used + n > this.limit)
-      return false;
-    this.used += n;
-    return true;
-  }
-  get exhausted() {
-    return this.used >= this.limit;
-  }
-};
-async function pooled(items, limit, fn) {
-  const results = new Array(items.length);
-  let next = 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (next < items.length) {
-      const i = next++;
-      results[i] = await fn(items[i]);
-    }
-  });
-  await Promise.all(workers);
-  return results;
-}
-
-// dist/ghl/writes.js
-var WRITE_VERSION = "2021-04-15";
-async function sendSms(cfg, p) {
-  return ghlFetch(cfg, "/conversations/messages", {
-    method: "POST",
-    body: { type: "SMS", contactId: p.contactId, message: p.message }
-  });
-}
-async function sendEmail(cfg, p) {
-  return ghlFetch(cfg, "/conversations/messages", {
-    method: "POST",
-    body: { type: "Email", contactId: p.contactId, subject: p.subject, html: p.html }
-  });
-}
-async function updateTags(cfg, p) {
-  if (p.add.length > 0) {
-    await ghlFetch(cfg, `/contacts/${p.contactId}/tags`, {
-      method: "POST",
-      body: { tags: p.add },
-      version: WRITE_VERSION
-    });
-  }
-  if (p.remove.length > 0) {
-    await ghlFetch(cfg, `/contacts/${p.contactId}/tags`, {
-      method: "DELETE",
-      body: { tags: p.remove },
-      version: WRITE_VERSION
-    });
-  }
-}
-async function addNote(cfg, p) {
-  await ghlFetch(cfg, `/contacts/${p.contactId}/notes`, {
-    method: "POST",
-    body: { body: p.body },
-    version: WRITE_VERSION
-  });
-}
-async function createOpportunity(cfg, p) {
-  const data = await ghlFetch(cfg, "/opportunities/", {
-    method: "POST",
-    body: {
-      pipelineId: p.pipelineId,
-      locationId: cfg.locationId,
-      pipelineStageId: p.pipelineStageId,
-      contactId: p.contactId,
-      name: p.name,
-      status: "open",
-      ...p.monetaryValue !== void 0 ? { monetaryValue: p.monetaryValue } : {},
-      ...p.source ? { source: p.source } : {}
-    }
-  });
-  return { opportunityId: data?.opportunity?.id ?? data?.id };
-}
-async function updateOpportunity(cfg, p) {
-  const body = {};
-  if (p.pipelineStageId)
-    body.pipelineStageId = p.pipelineStageId;
-  if (p.status)
-    body.status = p.status;
-  await ghlFetch(cfg, `/opportunities/${p.opportunityId}`, {
-    method: "PUT",
-    body,
-    version: WRITE_VERSION
-  });
-}
-function friendly400(actionType, err) {
-  const detail = err.body.slice(0, 300);
-  switch (actionType) {
-    case "send_sms":
-      return `GoHighLevel rejected the SMS \u2014 this account may not have a texting phone number set up, or the contact's mobile number isn't valid. GHL said: ${detail}`;
-    case "send_email":
-      return `GoHighLevel rejected the email \u2014 this account may not have an email provider connected, or the contact's email address isn't valid. GHL said: ${detail}`;
-    case "move_opportunity":
-      return `GoHighLevel rejected the update \u2014 the stage may not belong to this opportunity's pipeline. GHL said: ${detail}`;
-    case "create_opportunity":
-      return `GoHighLevel rejected the new opportunity \u2014 the pipeline or stage may no longer exist, or the contact ID may be invalid. GHL said: ${detail}`;
-    default:
-      return `GoHighLevel rejected the change. GHL said: ${detail}`;
-  }
-}
-async function executePendingAction(cfg, row) {
-  const p = row.payload;
-  try {
-    switch (row.action_type) {
-      case "send_sms": {
-        const result = await sendSms(cfg, { contactId: p.contactId, message: p.message });
-        return { summary: `SMS sent to ${p.contactName ?? p.contactId}.`, result: { ...result } };
-      }
-      case "send_email": {
-        const result = await sendEmail(cfg, {
-          contactId: p.contactId,
-          subject: p.subject,
-          html: p.html
-        });
-        return { summary: `Email sent to ${p.contactName ?? p.contactId}.`, result: { ...result } };
-      }
-      case "update_tags": {
-        await updateTags(cfg, { contactId: p.contactId, add: p.add ?? [], remove: p.remove ?? [] });
-        const parts = [
-          (p.add ?? []).length > 0 ? `added ${p.add.join(", ")}` : "",
-          (p.remove ?? []).length > 0 ? `removed ${p.remove.join(", ")}` : ""
-        ].filter(Boolean);
-        return {
-          summary: `Tags updated on ${p.contactName ?? p.contactId}: ${parts.join("; ")}.`,
-          result: { add: p.add ?? [], remove: p.remove ?? [] }
-        };
-      }
-      case "add_note": {
-        await addNote(cfg, { contactId: p.contactId, body: p.note });
-        return { summary: `Note added to ${p.contactName ?? p.contactId}.`, result: { ok: true } };
-      }
-      case "move_opportunity": {
-        await updateOpportunity(cfg, {
-          opportunityId: p.opportunityId,
-          pipelineStageId: p.pipelineStageId,
-          status: p.status
-        });
-        const what = p.status ? `marked ${String(p.status).toUpperCase()}` : `moved to stage "${p.stageName ?? p.pipelineStageId}"`;
-        return {
-          summary: `Opportunity "${p.opportunityName ?? p.opportunityId}" ${what}.`,
-          result: { ok: true }
-        };
-      }
-      case "create_opportunity": {
-        const result = await createOpportunity(cfg, {
-          contactId: p.contactId,
-          name: p.name,
-          pipelineId: p.pipelineId,
-          pipelineStageId: p.pipelineStageId,
-          monetaryValue: p.monetaryValue,
-          source: p.source
-        });
-        return {
-          summary: `Opportunity "${p.name}" created for ${p.contactName ?? p.contactId} in "${p.pipelineName ?? p.pipelineId}" / stage "${p.stageName ?? p.pipelineStageId}".`,
-          result: { ...result }
-        };
-      }
-      default:
-        throw new Error(`Unknown action type: ${row.action_type}`);
-    }
-  } catch (err) {
-    if (err instanceof GhlError && err.status < 500) {
-      throw new Error(friendly400(row.action_type, err));
-    }
-    throw err;
-  }
-}
-
-// dist/lib/pendingActions.js
-var CODE_TTL_MS = 10 * 60 * 1e3;
-var CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-function sha256Hex(value) {
-  return createHash("sha256").update(value).digest("hex");
-}
-function newCode() {
-  let code = "OTTO-";
-  for (let i = 0; i < 6; i++)
-    code += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
-  return code;
-}
-async function preparePendingAction(gate, action) {
-  const code = newCode();
-  const expiresAt = new Date(Date.now() + CODE_TTL_MS);
-  await gate.store.insert({
-    code_hash: sha256Hex(code),
-    br_user_id: gate.actor.brUserId,
-    ghl_location_id: gate.actor.locationId,
-    br_email: gate.actor.brEmail ?? null,
-    action_type: action.actionType,
-    payload: action.payload,
-    preview: action.preview,
-    expires_at: expiresAt.toISOString()
-  });
-  return { code, expiresAt };
-}
-var INVALID_CODE_MESSAGE = "That confirmation code isn't valid \u2014 it may have been used already, cancelled, or belong to a different login. Run the prepare step again to get a fresh code.";
-async function redeemPendingAction(gate, code) {
-  const codeHash = sha256Hex(code.trim().toUpperCase());
-  const row = await gate.store.consume(codeHash, gate.actor);
-  if (!row)
-    return { error: INVALID_CODE_MESSAGE };
-  if (new Date(row.expires_at).getTime() < Date.now()) {
-    await gate.store.finish(codeHash, { result: { outcome: "expired" } });
-    return {
-      error: "That confirmation expired (codes last 10 minutes). Please prepare the action again."
-    };
-  }
-  return { row };
-}
-async function confirmPendingAction(gate, cfg, code) {
-  const redeemed = await redeemPendingAction(gate, code);
-  if ("error" in redeemed)
-    return redeemed.error;
-  const row = redeemed.row;
-  try {
-    const outcome = await executePendingAction(cfg, row);
-    await gate.store.finish(row.code_hash, {
-      executed_at: (/* @__PURE__ */ new Date()).toISOString(),
-      result: outcome.result
-    });
-    return `\u2705 ${outcome.summary}`;
-  } catch (err) {
-    await gate.store.finish(row.code_hash, { result: { error: err.message } });
-    return `That didn't go through: ${err.message}
-
-The confirmation code has been used up \u2014 prepare the action again to retry.`;
-  }
-}
-
-// dist/lib/period.js
-var PERIOD_VALUES = [
-  "today",
-  "yesterday",
-  "last_7_days",
-  "last_14_days",
-  "last_30_days",
-  "this_month",
-  "last_month"
-];
-function startOfDay(d) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-function resolvePeriod(period, now = /* @__PURE__ */ new Date()) {
-  const todayStart = startOfDay(now);
-  const day = 24 * 60 * 60 * 1e3;
-  switch (period) {
-    case "today":
-      return { start: todayStart, end: now, label: "today" };
-    case "yesterday": {
-      const start = new Date(todayStart.getTime() - day);
-      return { start, end: new Date(todayStart.getTime() - 1), label: "yesterday" };
-    }
-    case "last_7_days":
-      return { start: new Date(todayStart.getTime() - 6 * day), end: now, label: "the last 7 days" };
-    case "last_14_days":
-      return { start: new Date(todayStart.getTime() - 13 * day), end: now, label: "the last 14 days" };
-    case "last_30_days":
-      return { start: new Date(todayStart.getTime() - 29 * day), end: now, label: "the last 30 days" };
-    case "this_month": {
-      const start = new Date(now.getFullYear(), now.getMonth(), 1);
-      return { start, end: now, label: "this month so far" };
-    }
-    case "last_month": {
-      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const end = new Date(new Date(now.getFullYear(), now.getMonth(), 1).getTime() - 1);
-      return { start, end, label: "last month" };
-    }
-  }
-}
-var ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-var DAY_MS = 24 * 60 * 60 * 1e3;
-var MAX_RANGE_DAYS = 92;
-function resolveRangeArgs(period, args, opts = {}, now = /* @__PURE__ */ new Date()) {
-  const { start_date: startArg, end_date: endArg } = args ?? {};
-  if (!startArg && !endArg)
-    return { ...resolvePeriod(period, now), deep: false };
-  if (!startArg || !endArg) {
-    return {
-      error: "Please give both a start date and an end date (YYYY-MM-DD) \u2014 for example start_date 2026-08-01 and end_date 2026-08-14."
-    };
-  }
-  if (!ISO_DATE.test(startArg) || !ISO_DATE.test(endArg)) {
-    return { error: "Dates need to be in YYYY-MM-DD format, e.g. 2026-08-01." };
-  }
-  const start = /* @__PURE__ */ new Date(`${startArg}T00:00:00`);
-  const end = /* @__PURE__ */ new Date(`${endArg}T23:59:59.999`);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    return { error: "One of those dates doesn't exist \u2014 double-check the day and month." };
-  }
-  if (start > end) {
-    return { error: "The start date is after the end date \u2014 swap them and try again." };
-  }
-  const spanDays = Math.ceil((end.getTime() - start.getTime()) / DAY_MS);
-  if (spanDays > MAX_RANGE_DAYS) {
-    return {
-      error: `That's about a ${spanDays}-day range \u2014 for deep analysis please keep it under ~3 months, or split it into shorter ranges.`
-    };
-  }
-  if (!opts.allowFuture && start > now) {
-    return { error: "That range is in the future \u2014 this report only covers what has already happened." };
-  }
-  const label = `${fmtDate(start)} to ${fmtDate(end)}`;
-  return { start, end: end > now && !opts.allowFuture ? now : end, label, deep: true };
-}
-function fmtDate(d) {
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-function fmtDateTime(d) {
-  return d.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit"
-  });
-}
-function fmtMinutes(mins) {
-  if (mins < 1)
-    return "under a minute";
-  if (mins < 60)
-    return `${Math.round(mins)} min`;
-  if (mins < 60 * 24) {
-    const h = Math.floor(mins / 60);
-    const m = Math.round(mins % 60);
-    return m > 0 ? `${h}h ${m}m` : `${h}h`;
-  }
-  return `${(mins / 60 / 24).toFixed(1)} days`;
-}
-
-// dist/tools/core/writeCommon.js
-var NO_WRITES_MESSAGE = "Writes aren't available on this connection \u2014 reconnect Otto AI through the normal login and try again.";
-function confirmFooter(code, expiresAt) {
-  return [
-    "",
-    "**Nothing has been sent or changed yet.** Show this preview to the operator and wait for their explicit approval.",
-    `Once they approve, call confirm_action with code **${code}** (expires ${fmtDateTime(expiresAt)} \u2014 10 minutes). To abandon it, call cancel_action with the same code.`
-  ].join("\n");
-}
-
-// dist/tools/core/confirmAction.js
-var confirmActionTool = {
-  name: "confirm_action",
-  title: "Confirm a prepared action",
-  description: "Executes a previously prepared action (message send, tag change, note, opportunity update) using its one-time confirmation code. ONLY call this after the human operator has seen the preview and explicitly approved \u2014 never in the same turn as a prepare tool. Codes are single-use and expire in 10 minutes.",
-  kind: "write",
-  inputSchema: {
-    code: external_exports.string().describe("The OTTO- confirmation code from the prepare step.")
-  },
-  logArgs: () => ({}),
-  handler: async ({ cfg, gate }, args) => {
-    if (!gate)
-      return NO_WRITES_MESSAGE;
-    const code = String(args.code ?? "").trim();
-    if (!code)
-      return "Give me the OTTO- confirmation code from the prepare step.";
-    return confirmPendingAction(gate, cfg, code);
-  }
-};
-var cancelActionTool = {
-  name: "cancel_action",
-  title: "Cancel a prepared action",
-  description: "Cancels a previously prepared action so its confirmation code can never be used. Call this when the operator declines or changes their mind.",
-  kind: "write",
-  inputSchema: {
-    code: external_exports.string().describe("The OTTO- confirmation code to void.")
-  },
-  logArgs: () => ({}),
-  handler: async ({ gate }, args) => {
-    if (!gate)
-      return NO_WRITES_MESSAGE;
-    const code = String(args.code ?? "").trim().toUpperCase();
-    if (!code)
-      return "Give me the OTTO- confirmation code to cancel.";
-    const ok = await gate.store.cancel(sha256Hex(code), gate.actor);
-    return ok ? "Cancelled \u2014 that action will not run, and its code is now void." : "Nothing to cancel \u2014 that code isn't pending (it may have been used, already cancelled, or mistyped).";
-  }
-};
-
-// dist/ghl/api.js
-async function getLocation(cfg) {
-  const data = await ghlFetch(cfg, `/locations/${cfg.locationId}`);
-  const loc = data.location ?? data;
-  return { id: loc.id ?? cfg.locationId, name: loc.name };
-}
-async function getContactsAddedBetween(cfg, start, end, maxContacts = 500) {
-  try {
-    const collected = [];
-    let total;
-    let page2 = 1;
-    while (collected.length < maxContacts && page2 <= 10) {
-      const data = await ghlFetch(cfg, "/contacts/search", {
-        method: "POST",
-        body: {
-          locationId: cfg.locationId,
-          page: page2,
-          pageLimit: 100,
-          filters: [
-            {
-              field: "dateAdded",
-              operator: "range",
-              value: { gte: start.toISOString(), lte: end.toISOString() }
-            }
-          ],
-          sort: [{ field: "dateAdded", direction: "desc" }]
-        }
-      });
-      const batch = data.contacts ?? [];
-      collected.push(...batch);
-      if (typeof data.total === "number")
-        total = data.total;
-      if (batch.length < 100)
-        break;
-      page2++;
-    }
-    return { contacts: collected.slice(0, maxContacts), total };
-  } catch {
-    const collected = [];
-    let startAfterId;
-    let startAfter;
-    for (let pageNum = 0; pageNum < 10; pageNum++) {
-      const data = await ghlFetch(cfg, "/contacts/", {
-        query: {
-          locationId: cfg.locationId,
-          limit: 100,
-          startAfterId,
-          startAfter
-        }
-      });
-      const batch = data.contacts ?? [];
-      if (batch.length === 0)
-        break;
-      for (const c of batch) {
-        const added = c.dateAdded ? new Date(c.dateAdded) : void 0;
-        if (added && added >= start && added <= end)
-          collected.push(c);
-      }
-      const oldest = batch[batch.length - 1]?.dateAdded;
-      if (oldest && new Date(oldest) < start)
-        break;
-      const meta = data.meta ?? {};
-      startAfterId = meta.startAfterId;
-      startAfter = meta.startAfter;
-      if (!startAfterId && !startAfter)
-        break;
-      if (collected.length >= maxContacts)
-        break;
-    }
-    return { contacts: collected.slice(0, maxContacts) };
-  }
-}
-async function getConversationsForContact(cfg, contactId) {
-  const data = await ghlFetch(cfg, "/conversations/search", {
-    query: { locationId: cfg.locationId, contactId, limit: 20 }
-  });
-  return data.conversations ?? [];
-}
-async function getMessages(cfg, conversationId) {
-  const data = await ghlFetch(cfg, `/conversations/${conversationId}/messages`, {
-    query: { limit: 100 }
-  });
-  const inner = data.messages;
-  if (Array.isArray(inner))
-    return inner;
-  if (inner && Array.isArray(inner.messages))
-    return inner.messages;
-  return [];
-}
-async function listUsersDetailed(cfg) {
-  const data = await ghlFetch(cfg, "/users/", { query: { locationId: cfg.locationId } });
-  return (data.users ?? []).filter((u) => u.id).map((u) => ({
-    id: u.id,
-    name: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.name || u.email || u.id,
-    email: u.email,
-    phone: u.phone,
-    roles: u.roles
-  }));
-}
-async function listUsers(cfg) {
-  const map = /* @__PURE__ */ new Map();
-  try {
-    for (const u of await listUsersDetailed(cfg))
-      map.set(u.id, u.name);
-  } catch {
-  }
-  return map;
-}
-async function getOpportunities(cfg, maxPages = 5) {
-  const collected = [];
-  let page2 = 1;
-  while (page2 <= maxPages) {
-    const data = await ghlFetch(cfg, "/opportunities/search", {
-      query: { location_id: cfg.locationId, limit: 100, page: page2 }
-    });
-    const batch = data.opportunities ?? [];
-    collected.push(...batch);
-    if (batch.length < 100)
-      break;
-    page2++;
-  }
-  return collected;
-}
-async function getCalendars(cfg) {
-  const data = await ghlFetch(cfg, "/calendars/", {
-    query: { locationId: cfg.locationId },
-    version: "2021-04-15"
-  });
-  return data.calendars ?? [];
-}
-async function getCalendarEvents(cfg, start, end) {
-  const calendars = (await getCalendars(cfg)).filter((c) => c.isActive !== false).slice(0, 10);
-  if (calendars.length === 0)
-    return [];
-  const perCalendar = await pooled(calendars, 3, async (cal) => {
-    const data = await ghlFetch(cfg, "/calendars/events", {
-      query: {
-        locationId: cfg.locationId,
-        calendarId: cal.id,
-        startTime: start.getTime(),
-        endTime: end.getTime()
-      },
-      version: "2021-04-15"
-    });
-    return (data.events ?? []).map((e) => ({
-      ...e,
-      calendarName: cal.name
-    }));
-  });
-  return perCalendar.flat();
-}
-
-// dist/tools/ghl/checkConnection.js
-async function probe(name, fn, optional2 = false) {
-  try {
-    const detail = await fn();
-    return { name, ok: true, detail, optional: optional2 };
-  } catch (err) {
-    const detail = err instanceof GhlError ? err.friendly() : `Unexpected error: ${err.message}`;
-    return { name, ok: false, detail, optional: optional2 };
-  }
-}
-async function checkConnection(cfg) {
-  const checks = [];
-  if (cfg.mode === "stdio" && cfg.envFile) {
-    checks.push({
-      name: "Settings file (.env)",
-      ok: cfg.envFile.exists,
-      detail: cfg.envFile.exists ? `Found at ${cfg.envFile.path}` : `Not found. Expected at ${cfg.envFile.path} \u2014 copy .env.example to .env and fill it in.`
-    });
-  }
-  checks.push({
-    name: "Location ID",
-    ok: !!cfg.locationId,
-    detail: cfg.locationId ? `Set to ${cfg.locationId} \u2014 all tools are locked to this one location.` : cfg.mode === "stdio" ? "GHL_LOCATION_ID is empty in the .env file. Find it in GHL under Settings -> Business Profile." : "No GoHighLevel location is linked to your account yet \u2014 contact Limo Marketer support."
-  });
-  let credentialOk = false;
-  try {
-    const info = await resolveGhlToken(cfg);
-    credentialOk = true;
-    const minutesLeft = info.expiresAtMs ? Math.max(0, Math.round((info.expiresAtMs - Date.now()) / 6e4)) : void 0;
-    const detail = info.source === "pit" ? "Using a Private Integration Token from the .env file." : cfg.mode === "stdio" ? `Using this location's marketplace app token from the local vault${minutesLeft !== void 0 ? ` (valid for about ${minutesLeft} more minutes; re-run the seed script when it expires)` : ""}.` : `Using this location's GoHighLevel connection${minutesLeft !== void 0 ? ` (valid for about ${minutesLeft} more minutes; it renews automatically)` : ""}.`;
-    checks.push({ name: "GoHighLevel credential", ok: true, detail });
-  } catch (err) {
-    checks.push({
-      name: "GoHighLevel credential",
-      ok: false,
-      detail: err.message
-    });
-  }
-  if (credentialOk && cfg.locationId) {
-    checks.push(await probe("Connect to GoHighLevel", async () => {
-      const loc = await getLocation(cfg);
-      return loc.name ? `Connected. This token reaches the location "${loc.name}".` : "Connected to the location.";
-    }));
-    checks.push(await probe("Read contacts", async () => {
-      const data = await ghlFetch(cfg, "/contacts/", {
-        query: { locationId: cfg.locationId, limit: 1 }
-      });
-      const total = data.meta?.total;
-      return total !== void 0 ? `Working. This location has about ${total} contacts.` : "Working.";
-    }));
-    checks.push(await probe("Read conversations & messages", async () => {
-      await ghlFetch(cfg, "/conversations/search", {
-        query: { locationId: cfg.locationId, limit: 1 }
-      });
-      return "Working.";
-    }));
-    checks.push(await probe("Read opportunities (pipeline)", async () => {
-      await ghlFetch(cfg, "/opportunities/search", {
-        query: { location_id: cfg.locationId, limit: 1 }
-      });
-      return "Working.";
-    }));
-    checks.push(await probe("Read calendar appointments", async () => {
-      const now = /* @__PURE__ */ new Date();
-      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1e3);
-      const events = await getCalendarEvents(cfg, weekAgo, now);
-      return `Working. ${events.length} appointment(s) found in the last 7 days.`;
-    }, true));
-    checks.push(await probe("Read team members", async () => {
-      const data = await ghlFetch(cfg, "/users/", {
-        query: { locationId: cfg.locationId }
-      });
-      return `Working. ${data.users?.length ?? 0} team members found.`;
-    }, true));
-  }
-  const required2 = checks.filter((c) => !c.optional);
-  const passed = required2.filter((c) => c.ok).length;
-  const allGood = passed === required2.length;
-  const lines = [];
-  lines.push(allGood ? "## \u2705 Otto AI is connected and ready" : "## \u26A0\uFE0F Otto AI setup isn't finished yet");
-  lines.push("");
-  for (const c of checks) {
-    const mark = c.ok ? "\u2705" : c.optional ? "\u26A0\uFE0F" : "\u274C";
-    const suffix = c.optional && !c.ok ? " *(optional \u2014 some features will be limited)*" : "";
-    lines.push(`- ${mark} **${c.name}**${suffix}: ${c.detail}`);
-  }
-  lines.push("");
-  if (allGood) {
-    lines.push('Everything required is working. Try asking: *"Show me my new leads from the last 7 days"* or *"Run my sales assessment."*');
-  } else {
-    lines.push("Fix the items marked \u274C above (start from the top \u2014 later checks often fail because of an earlier one), then run this check again.");
-  }
-  return lines.join("\n");
-}
-var checkConnectionTool = {
-  name: "check_connection",
-  title: "Check Otto AI connection",
-  description: "Health check for the Otto AI setup. Verifies the settings, the GoHighLevel token, and that each kind of data (contacts, conversations, opportunities, calendar, users) can be read. Use this whenever setup status is in question or another tool reports a problem.",
-  kind: "read",
-  inputSchema: {},
-  handler: ({ cfg }) => checkConnection(cfg)
-};
-
-// dist/ghl/apiCrm.js
-async function getContact(cfg, contactId) {
-  const data = await ghlFetch(cfg, `/contacts/${contactId}`);
-  return data.contact ?? data;
-}
-async function searchContacts(cfg, query, limit = 5) {
-  const data = await ghlFetch(cfg, "/contacts/search", {
-    method: "POST",
-    body: {
-      locationId: cfg.locationId,
-      query,
-      page: 1,
-      pageLimit: Math.min(Math.max(limit, 1), 20)
-    }
-  });
-  return data.contacts ?? [];
-}
-var FIELD_DEFS_TTL_MS = 60 * 60 * 1e3;
-var fieldDefsCache = /* @__PURE__ */ new Map();
-async function getCustomFieldNames(cfg) {
-  const key = cfg.locationId ?? "";
-  const cached2 = fieldDefsCache.get(key);
-  if (cached2 && Date.now() - cached2.cachedAt < FIELD_DEFS_TTL_MS)
-    return cached2.byId;
-  const byId = /* @__PURE__ */ new Map();
-  try {
-    const data = await ghlFetch(cfg, `/locations/${cfg.locationId}/customFields`, {
-      query: { model: "all" }
-    });
-    for (const def of data.customFields ?? []) {
-      if (def.id)
-        byId.set(def.id, def.name ?? def.fieldKey ?? def.id);
-    }
-    fieldDefsCache.set(key, { byId, cachedAt: Date.now() });
-  } catch {
-  }
-  return byId;
-}
-function contactDisplayName(c) {
-  return c.contactName || [c.firstName, c.lastName].filter(Boolean).join(" ") || c.email || c.phone || `Contact ${c.id.slice(0, 6)}`;
-}
-var LOOKS_LIKE_ID = /^[A-Za-z0-9]{15,}$/;
-async function resolveContact(cfg, ref) {
-  const trimmed = ref.trim();
-  if (LOOKS_LIKE_ID.test(trimmed) && !trimmed.includes("@")) {
-    try {
-      const contact2 = await getContact(cfg, trimmed);
-      if (contact2?.id)
-        return { kind: "found", contact: contact2 };
-    } catch {
-    }
-  }
-  const matches2 = await searchContacts(cfg, trimmed, 5);
-  if (matches2.length === 0)
-    return { kind: "none" };
-  if (matches2.length > 1)
-    return { kind: "ambiguous", candidates: matches2 };
-  const contact = await getContact(cfg, matches2[0].id);
-  return contact?.id ? { kind: "found", contact } : { kind: "none" };
-}
-function describeResolutionMiss(ref, res) {
-  if (res.kind === "none") {
-    return `I couldn't find a contact matching "${ref}". Try their email, phone number, or exact name \u2014 or run find_contact to search.`;
-  }
-  if (res.kind === "ambiguous") {
-    const lines = res.candidates.map((c) => `- ${contactDisplayName(c)} (${[c.email, c.phone].filter(Boolean).join(", ") || "no contact info"} \u2014 id ${c.id})`);
-    return `I found ${res.candidates.length} contacts matching "${ref}" \u2014 which one?
-${lines.join("\n")}`;
-  }
-  return null;
-}
-
-// dist/server/tenant.js
-function tenantProblem(cfg) {
-  const missing = [];
-  if (!cfg.locationId)
-    missing.push("GHL_LOCATION_ID");
-  if (!cfg.ghlPit && !cfg.vault) {
-    missing.push("a GoHighLevel credential (either GHL_PRIVATE_INTEGRATION_TOKEN, or MILES_TOKEN_DB_URL + MILES_TOKEN_DB_KEY for the local token vault)");
-  }
-  if (missing.length === 0)
-    return null;
-  if (cfg.mode === "http") {
-    return "Your Otto AI connection isn't fully set up on our side yet \u2014 your account doesn't have a GoHighLevel location linked. Please contact Limo Marketer support.";
-  }
-  const envPath2 = cfg.envFile?.path ?? ".env";
-  return `Otto AI isn't fully set up yet. Missing in the .env file: ${missing.join(" and ")}.
-
-Open ${envPath2} in any text editor, fill in the value(s) after the = sign (the comments in that file explain each one), save, then restart Claude Desktop. You can run the check_connection tool afterwards to confirm everything works.`;
-}
-
-// dist/tools/ghl/findContact.js
-var findContactTool = {
-  name: "find_contact",
-  title: "Find a contact",
-  description: "Searches contacts by name, email, or phone and shows full details for a match: contact info, source, tags, assigned team member, and custom fields. Use this to look someone up or to get a contact's ID for other tools.",
-  kind: "read",
-  inputSchema: {
-    query: external_exports.string().describe("Who to find: a name, email, phone number, or contact ID."),
-    limit: external_exports.number().int().min(1).max(20).default(5).describe("Max matches to list when several fit.")
-  },
-  logArgs: () => void 0,
-  handler: async ({ cfg }, args) => {
-    const problem = tenantProblem(cfg);
-    if (problem)
-      return problem;
-    const query = String(args.query ?? "").trim();
-    if (!query)
-      return "Tell me who to find \u2014 a name, email, or phone number.";
-    try {
-      const res = await resolveContact(cfg, query);
-      if (res.kind === "ambiguous") {
-        const limit = Number(args.limit ?? 5);
-        const candidates = res.candidates.length >= 5 && limit > 5 ? await searchContacts(cfg, query, limit) : res.candidates;
-        return describeResolutionMiss(query, candidates === res.candidates ? res : { kind: "ambiguous", candidates }) ?? "Multiple matches found.";
-      }
-      const miss = describeResolutionMiss(query, res);
-      if (miss)
-        return miss;
-      if (res.kind !== "found")
-        return "No contact found.";
-      const c = res.contact;
-      const [fieldNames, userNames] = await Promise.all([
-        getCustomFieldNames(cfg),
-        listUsers(cfg)
-      ]);
-      const lines = [];
-      lines.push(`## ${contactDisplayName(c)}`);
-      lines.push("");
-      lines.push(`- **Contact ID:** ${c.id}`);
-      if (c.email)
-        lines.push(`- **Email:** ${c.email}`);
-      if (c.phone)
-        lines.push(`- **Phone:** ${c.phone}`);
-      if (c.companyName)
-        lines.push(`- **Company:** ${c.companyName}`);
-      if (c.source)
-        lines.push(`- **Source:** ${c.source}`);
-      if (c.dateAdded)
-        lines.push(`- **Added:** ${fmtDateTime(new Date(c.dateAdded))}`);
-      if (c.assignedTo)
-        lines.push(`- **Assigned to:** ${userNames.get(c.assignedTo) ?? c.assignedTo}`);
-      if (c.dnd)
-        lines.push(`- **Do not disturb:** ON \u2014 this contact opted out of messages.`);
-      if (c.tags?.length)
-        lines.push(`- **Tags:** ${c.tags.join(", ")}`);
-      const fields = (c.customFields ?? []).filter((f) => f.value !== void 0 && f.value !== null && String(f.value).trim() !== "");
-      if (fields.length > 0) {
-        lines.push("");
-        lines.push("**Details on file:**");
-        for (const f of fields.slice(0, 25)) {
-          lines.push(`- ${fieldNames.get(f.id) ?? f.id}: ${String(f.value).slice(0, 200)}`);
-        }
-      }
-      return lines.join("\n");
-    } catch (err) {
-      if (err instanceof GhlError)
-        return `Couldn't look that up. ${err.friendly()}`;
-      throw err;
-    }
-  }
-};
-
-// dist/ghl/apiPipelines.js
-var PIPELINE_TTL_MS = 60 * 60 * 1e3;
-var pipelineCache = /* @__PURE__ */ new Map();
-async function getPipelines(cfg) {
-  const key = cfg.locationId ?? "";
-  const cached2 = pipelineCache.get(key);
-  if (cached2 && Date.now() - cached2.cachedAt < PIPELINE_TTL_MS)
-    return cached2.pipelines;
-  const data = await ghlFetch(cfg, "/opportunities/pipelines", {
-    query: { locationId: cfg.locationId }
-  });
-  const pipelines = (data.pipelines ?? []).map((p) => ({
-    id: p.id,
-    name: p.name ?? p.id,
-    stages: (p.stages ?? []).map((s) => ({ id: s.id, name: s.name ?? s.id }))
-  }));
-  pipelineCache.set(key, { pipelines, cachedAt: Date.now() });
-  return pipelines;
-}
-var norm = (s) => s.trim().toLowerCase();
-function matchPipeline(pipelines, name) {
-  return pipelines.find((p) => norm(p.name) === norm(name));
-}
-function matchStage(pipeline, stageName) {
-  return pipeline.stages.find((s) => norm(s.name) === norm(stageName));
-}
-async function searchOpportunities(cfg, filters2 = {}) {
-  const collected = [];
-  let total;
-  const maxPages = filters2.maxPages ?? 5;
-  let page2 = 1;
-  while (page2 <= maxPages) {
-    const data = await ghlFetch(cfg, "/opportunities/search", {
-      query: {
-        location_id: cfg.locationId,
-        limit: 100,
-        page: page2,
-        status: filters2.status,
-        pipeline_id: filters2.pipelineId
-      }
-    });
-    const batch = data.opportunities ?? [];
-    collected.push(...batch);
-    if (typeof data.meta?.total === "number")
-      total = data.meta.total;
-    if (batch.length < 100)
-      break;
-    page2++;
-  }
-  return { opportunities: collected, total };
-}
-async function getOpportunity(cfg, opportunityId) {
-  const data = await ghlFetch(cfg, `/opportunities/${opportunityId}`, {
-    version: "2021-07-28"
-  });
-  return data.opportunity ?? data;
-}
-async function listWorkflows(cfg) {
-  const data = await ghlFetch(cfg, "/workflows/", { query: { locationId: cfg.locationId } });
-  return data.workflows ?? [];
-}
-
-// dist/lib/leads.js
-var DETAIL_LIMIT_DEFAULT = 50;
-var DETAIL_LIMIT_MAX = 300;
-var CHANNEL_LABELS = {
-  TYPE_SMS: "SMS",
-  TYPE_EMAIL: "Email",
-  TYPE_CALL: "Phone call",
-  TYPE_PHONE: "Phone call",
-  TYPE_VOICEMAIL: "Voicemail",
-  TYPE_WHATSAPP: "WhatsApp",
-  TYPE_GMB: "Google Business chat",
-  TYPE_FB: "Facebook Messenger",
-  TYPE_IG: "Instagram",
-  TYPE_LIVE_CHAT: "Live chat",
-  TYPE_CUSTOM_SMS: "SMS",
-  TYPE_CUSTOM_EMAIL: "Email"
-};
-function channelLabel(messageType) {
-  if (!messageType)
-    return "Unknown channel";
-  return CHANNEL_LABELS[messageType] ?? messageType.replace(/^TYPE_/, "").replace(/_/g, " ").toLowerCase();
-}
-function contactDisplayName2(c) {
-  return c.contactName || [c.firstName, c.lastName].filter(Boolean).join(" ") || c.email || c.phone || `Contact ${c.id.slice(0, 6)}`;
-}
-function median(nums) {
-  if (nums.length === 0)
-    return void 0;
-  const s = [...nums].sort((a, b) => a - b);
-  const mid = Math.floor(s.length / 2);
-  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
-}
-async function buildLeadReport(cfg, start, end, detailLimit = DETAIL_LIMIT_DEFAULT) {
-  const [window, userNames] = await Promise.all([
-    getContactsAddedBetween(cfg, start, end, Math.max(500, detailLimit * 2)),
-    listUsers(cfg)
-  ]);
-  const contacts = window.contacts;
-  const toAnalyze = contacts.slice(0, detailLimit);
-  let analysisErrors = 0;
-  const leads = await pooled(toAnalyze, 4, async (contact) => {
-    const createdAt = contact.dateAdded ? new Date(contact.dateAdded) : start;
-    const base = {
-      contactId: contact.id,
-      name: contactDisplayName2(contact),
-      createdAt,
-      source: contact.source,
-      responded: false
-    };
-    try {
-      const conversations = await getConversationsForContact(cfg, contact.id);
-      let first;
-      for (const convo of conversations) {
-        const messages = await getMessages(cfg, convo.id);
-        for (const m of messages) {
-          if (m.direction !== "outbound" || !m.dateAdded)
-            continue;
-          if (m.messageType && m.messageType.includes("ACTIVITY"))
-            continue;
-          const at = new Date(m.dateAdded);
-          if (at < createdAt)
-            continue;
-          if (!first || at < first.at) {
-            first = { at, channel: channelLabel(m.messageType), userId: m.userId };
-          }
-        }
-      }
-      if (first) {
-        base.responded = true;
-        base.firstResponseMinutes = (first.at.getTime() - createdAt.getTime()) / 6e4;
-        base.channel = first.channel;
-        base.respondedBy = first.userId ? userNames.get(first.userId) ?? "Automation / unknown user" : "Automation";
-      }
-    } catch {
-      analysisErrors++;
-    }
-    return base;
-  });
-  const responded = leads.filter((l) => l.responded);
-  const times = responded.map((l) => l.firstResponseMinutes).filter((n) => n !== void 0);
-  const channelCounts = {};
-  const responderCounts = {};
-  for (const l of responded) {
-    if (l.channel)
-      channelCounts[l.channel] = (channelCounts[l.channel] ?? 0) + 1;
-    if (l.respondedBy)
-      responderCounts[l.respondedBy] = (responderCounts[l.respondedBy] ?? 0) + 1;
-  }
-  const totalLeads = Math.max(window.total ?? 0, contacts.length);
-  return {
-    totalLeads,
-    analyzed: toAnalyze.length,
-    leads,
-    contactedCount: responded.length,
-    medianResponseMinutes: median(times),
-    respondedUnder5MinPct: times.length > 0 ? times.filter((t) => t <= 5).length / responded.length * 100 : void 0,
-    channelCounts,
-    responderCounts,
-    analysisErrors,
-    truncated: totalLeads > toAnalyze.length,
-    hardCapHit: toAnalyze.length >= DETAIL_LIMIT_MAX && totalLeads > toAnalyze.length
-  };
-}
-
-// dist/tools/args.js
-var periodArg = external_exports.enum(PERIOD_VALUES).describe("Preset time period, e.g. last_7_days").optional();
-var dateRangeArgs = {
-  start_date: external_exports.string().optional().describe("Start date (YYYY-MM-DD). Give BOTH dates to deep-analyze everything in the range (up to 300 leads) instead of the quick 50-lead sample."),
-  end_date: external_exports.string().optional().describe("End date (YYYY-MM-DD, inclusive).")
-};
-function logRangeArgs(args) {
-  const picked = {};
-  for (const key of ["period", "start_date", "end_date"]) {
-    if (args[key] !== void 0)
-      picked[key] = args[key];
-  }
-  return picked;
-}
-
-// dist/tools/ghl/getAwaitingReply.js
-var API_BUDGET = 250;
-var DEFAULT_CANDIDATES = 50;
-var DEEP_CANDIDATES = 300;
-function stageNameFor(pipelines, o) {
-  const pipeline = pipelines.find((p) => p.id === o.pipelineId);
-  return pipeline?.stages.find((s) => s.id === o.pipelineStageId)?.name;
-}
-async function lastRealMessage(cfg, contactId, budget) {
-  if (!budget.take(1))
-    return "budget";
-  const conversations = await getConversationsForContact(cfg, contactId);
-  let latest = null;
-  for (const convo of conversations.slice(0, 3)) {
-    if (!budget.take(1))
-      return "budget";
-    const messages = await getMessages(cfg, convo.id);
-    for (const m of messages) {
-      if (!m.dateAdded || (m.messageType ?? "").includes("ACTIVITY"))
-        continue;
-      if (!latest || new Date(m.dateAdded) > new Date(latest.dateAdded))
-        latest = m;
-    }
-  }
-  return latest;
-}
-var getAwaitingReplyTool = {
-  name: "get_awaiting_reply",
-  title: "Get conversations needing attention",
-  description: "Scans open opportunities by conversation state, two modes: customer_waiting (default) = the CUSTOMER sent the last message and nobody replied; gone_quiet = YOUR side sent the last message (e.g. a quote) and the customer has been silent longer than quiet_hours. Sorted by longest wait. Filter by pipeline name or a created-date range; large scans are resumable via offset.",
-  kind: "read",
-  inputSchema: {
-    mode: external_exports.enum(["customer_waiting", "gone_quiet"]).default("customer_waiting").describe("customer_waiting: they wrote last. gone_quiet: we wrote last and they went silent."),
-    quiet_hours: external_exports.number().min(1).max(720).default(24).describe("gone_quiet only: minimum hours of customer silence to count."),
-    pipeline: external_exports.string().optional().describe("Limit to one pipeline by name."),
-    offset: external_exports.number().int().min(0).default(0).describe("Resume a large scan where the last call stopped (the output says what to pass)."),
-    ...dateRangeArgs
-  },
-  logArgs: (args) => ({ ...logRangeArgs(args), mode: args.mode, offset: args.offset }),
-  handler: async ({ cfg }, args) => {
-    const problem = tenantProblem(cfg);
-    if (problem)
-      return problem;
-    const mode = args.mode === "gone_quiet" ? "gone_quiet" : "customer_waiting";
-    const quietMinutes = Number(args.quiet_hours ?? 24) * 60;
-    const offset = Math.max(0, Number(args.offset ?? 0));
-    const range = resolveRangeArgs("last_30_days", args);
-    if ("error" in range)
-      return range.error;
-    try {
-      const pipelines = await getPipelines(cfg);
-      let pipelineId;
-      if (args.pipeline) {
-        const match = matchPipeline(pipelines, String(args.pipeline));
-        if (!match) {
-          return `No pipeline named "${args.pipeline}". Available: ${pipelines.map((p) => p.name).join(", ")}.`;
-        }
-        pipelineId = match.id;
-      }
-      const { opportunities } = await searchOpportunities(cfg, { status: "open", pipelineId });
-      let candidates = opportunities.filter((o) => o.contactId);
-      if (range.deep) {
-        candidates = candidates.filter((o) => {
-          const created = o.createdAt ? new Date(o.createdAt) : void 0;
-          return created && created >= range.start && created <= range.end;
-        });
-      }
-      const cap = range.deep ? DEEP_CANDIDATES : DEFAULT_CANDIDATES;
-      const toCheck = candidates.slice(offset, offset + cap);
-      if (toCheck.length === 0) {
-        return offset > 0 ? `Nothing left to check \u2014 the scan already covered all ${candidates.length} matching opportunities.` : "No open opportunities to check \u2014 either the pipeline is empty or the filters matched nothing.";
-      }
-      const budget = new CallBudget(API_BUDGET);
-      const flagged = [];
-      let checked = 0;
-      await pooled(toCheck, 4, async (o) => {
-        const last = await lastRealMessage(cfg, o.contactId, budget);
-        if (last === "budget")
-          return;
-        checked++;
-        if (!last)
-          return;
-        const ageMinutes = (Date.now() - new Date(last.dateAdded).getTime()) / 6e4;
-        const hit = mode === "customer_waiting" ? last.direction === "inbound" : last.direction === "outbound" && ageMinutes >= quietMinutes;
-        if (hit) {
-          flagged.push({
-            opportunity: o,
-            stageName: stageNameFor(pipelines, o),
-            lastMessage: last,
-            minutes: ageMinutes
-          });
-        }
-      });
-      flagged.sort((a, b) => b.minutes - a.minutes);
-      const lines = [];
-      const heading = mode === "customer_waiting" ? `Awaiting your reply (${flagged.length} of ${checked} checked)` : `Gone quiet after your last message \u2014 silent ${Math.round(quietMinutes / 60)}h+ (${flagged.length} of ${checked} checked)`;
-      lines.push(`## ${heading}`);
-      lines.push("");
-      if (flagged.length === 0) {
-        lines.push(mode === "customer_waiting" ? "Nobody is waiting on you in the opportunities checked. \u{1F44D}" : "No quiet threads found in the opportunities checked \u2014 customers have replied to your latest messages.");
-      } else {
-        const lastColumn = mode === "customer_waiting" ? "Customer wrote" : "You wrote";
-        const waitColumn = mode === "customer_waiting" ? "Waiting" : "Silent for";
-        lines.push(`| Opportunity | Stage | Value | ${lastColumn} | ${waitColumn} | Last message |`);
-        lines.push("|---|---|---|---|---|---|");
-        for (const f of flagged.slice(0, 40)) {
-          const o = f.opportunity;
-          const value = o.monetaryValue ? `$${o.monetaryValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "\u2014";
-          const snippet = (f.lastMessage.body ?? "").replace(/\s+/g, " ").slice(0, 80) || `(${channelLabel(f.lastMessage.messageType)})`;
-          lines.push(`| ${o.name ?? o.id} | ${f.stageName ?? "\u2014"} | ${value} | ${fmtDateTime(new Date(f.lastMessage.dateAdded))} | ${fmtMinutes(f.minutes)} | ${snippet} |`);
-        }
-        lines.push("");
-        lines.push("*Use get_conversation on any of these to read the full thread before replying.*");
-      }
-      const nextOffset = offset + checked;
-      if (nextOffset < candidates.length) {
-        lines.push("");
-        lines.push(`*Checked opportunities ${offset + 1}\u2013${nextOffset} of ${candidates.length}. To continue the scan, call this tool again with offset ${nextOffset}.*`);
-      }
-      return lines.join("\n");
-    } catch (err) {
-      if (err instanceof GhlError)
-        return `Couldn't build the list. ${err.friendly()}`;
-      throw err;
-    }
-  }
-};
-
-// dist/tools/ghl/getConversation.js
-var getConversationTool = {
-  name: "get_conversation",
-  title: "Get a conversation",
-  description: "Shows the full message history with one contact across channels (SMS, email, calls), oldest first \u2014 who said what and when. The universal fallback: whatever question the list tools can't answer, read the threads that matter with this, one contact at a time. Always review a thread before drafting a reply.",
-  kind: "read",
-  inputSchema: {
-    contact: external_exports.string().describe("Who: a contact ID, email, phone, or name."),
-    limit: external_exports.number().int().min(1).max(100).default(50).describe("Max messages to show (most recent kept).")
-  },
-  logArgs: () => void 0,
-  handler: async ({ cfg }, args) => {
-    const problem = tenantProblem(cfg);
-    if (problem)
-      return problem;
-    const ref = String(args.contact ?? "").trim();
-    if (!ref)
-      return "Tell me whose conversation to pull \u2014 a name, email, or phone number.";
-    try {
-      const res = await resolveContact(cfg, ref);
-      const miss = describeResolutionMiss(ref, res);
-      if (miss)
-        return miss;
-      if (res.kind !== "found")
-        return "No contact found.";
-      const contact = res.contact;
-      const conversations = await getConversationsForContact(cfg, contact.id);
-      if (conversations.length === 0) {
-        return `${contactDisplayName(contact)} has no conversations yet \u2014 no messages have been exchanged.`;
-      }
-      const userNames = await listUsers(cfg);
-      const all = [];
-      for (const convo of conversations.slice(0, 5)) {
-        all.push(...await getMessages(cfg, convo.id));
-      }
-      const real = all.filter((m) => m.dateAdded && !(m.messageType ?? "").includes("ACTIVITY")).sort((a, b) => new Date(a.dateAdded).getTime() - new Date(b.dateAdded).getTime());
-      const limit = Number(args.limit ?? 50);
-      const shown = real.slice(-limit);
-      if (shown.length === 0) {
-        return `${contactDisplayName(contact)} has conversation threads but no readable messages in them.`;
-      }
-      const lines = [];
-      lines.push(`## Conversation with ${contactDisplayName(contact)}`);
-      lines.push("");
-      for (const m of shown) {
-        const when = fmtDateTime(new Date(m.dateAdded));
-        const channel = channelLabel(m.messageType);
-        const who = m.direction === "inbound" ? contactDisplayName(contact) : m.userId ? userNames.get(m.userId) ?? "Team" : "Automation";
-        const arrow = m.direction === "inbound" ? "\u2192" : "\u2190";
-        const body = (m.body ?? "(no text)").replace(/\s+/g, " ").slice(0, 500);
-        lines.push(`- ${arrow} **${who}** (${channel}, ${when}): ${body}`);
-      }
-      if (real.length > shown.length) {
-        lines.push("");
-        lines.push(`*Showing the ${shown.length} most recent of ${real.length} messages.*`);
-      }
-      return lines.join("\n");
-    } catch (err) {
-      if (err instanceof GhlError)
-        return `Couldn't pull that conversation. ${err.friendly()}`;
-      throw err;
-    }
-  }
-};
-
-// dist/lib/opportunityFields.js
-var VALUE_KEYS = [
-  "value",
-  "fieldValue",
-  "fieldValueString",
-  "fieldValueNumber",
-  "fieldValueDate",
-  "fieldValueArray",
-  "field_value"
-];
-function rawFieldValue(entry) {
-  for (const key of VALUE_KEYS) {
-    const v = entry[key];
-    if (v !== void 0 && v !== null && !(typeof v === "object" && !Array.isArray(v)))
-      return v;
-  }
-  return void 0;
-}
-var EPOCH_MS_MIN = 1e11;
-function epochToLocalDay(ms) {
-  const d = new Date(ms);
-  return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-}
-function fieldValueToString(entry) {
-  const v = rawFieldValue(entry);
-  if (v === void 0)
-    return void 0;
-  if (Array.isArray(v))
-    return v.map(String).join(", ");
-  if (typeof v === "number" && v >= EPOCH_MS_MIN)
-    return fmtDate(epochToLocalDay(v));
-  const s = String(v).trim();
-  return s || void 0;
-}
-var HIDDEN_FIELD_NAMES = /_lat$|_lng$|^minutes$|^distance$|^index/i;
-function opportunityFieldViews(o, fieldNames) {
-  const views = [];
-  for (const entry of o.customFields ?? []) {
-    const value = fieldValueToString(entry);
-    if (!value)
-      continue;
-    const name = fieldNames.get(entry.id) ?? entry.id;
-    if (HIDDEN_FIELD_NAMES.test(name))
-      continue;
-    views.push({ name, value });
-  }
-  return views;
-}
-var PICKUP_DATE_NAME = /pick\s*-?\s*up.*date/i;
-function parsePickupDate(raw) {
-  const mdY = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (mdY) {
-    const d = new Date(Number(mdY[3]), Number(mdY[1]) - 1, Number(mdY[2]));
-    return isNaN(d.getTime()) ? void 0 : d;
-  }
-  const parsed = new Date(raw);
-  return isNaN(parsed.getTime()) ? void 0 : parsed;
-}
-function extractPickupDate(o, fieldNames) {
-  for (const entry of o.customFields ?? []) {
-    const name = fieldNames.get(entry.id);
-    if (!name || !PICKUP_DATE_NAME.test(name))
-      continue;
-    const raw = rawFieldValue(entry);
-    if (raw === void 0)
-      continue;
-    if (typeof raw === "number" && raw >= EPOCH_MS_MIN) {
-      const date3 = epochToLocalDay(raw);
-      return { date: date3, raw: fmtDate(date3), hasValue: true };
-    }
-    const s = String(raw).trim();
-    if (!s)
-      continue;
-    if (/^\d{12,14}$/.test(s)) {
-      const date3 = epochToLocalDay(Number(s));
-      return { date: date3, raw: fmtDate(date3), hasValue: true };
-    }
-    return { date: parsePickupDate(s), raw: s, hasValue: true };
-  }
-  return { hasValue: false };
-}
-function fmtMoney(value) {
-  return value ? `$${value.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "\u2014";
-}
-
-// dist/tools/ghl/getFollowupCandidates.js
-var API_BUDGET2 = 220;
-var EXCERPT_MESSAGES = 6;
-function stageNameFor2(pipelines, o) {
-  const pipeline = pipelines.find((p) => p.id === o.pipelineId);
-  return pipeline?.stages.find((s) => s.id === o.pipelineStageId)?.name ?? "\u2014";
-}
-async function realMessages(cfg, contactId, budget) {
-  if (!budget.take(1))
-    return "budget";
-  const conversations = await getConversationsForContact(cfg, contactId);
-  const all = [];
-  for (const convo of conversations.slice(0, 3)) {
-    if (!budget.take(1))
-      return "budget";
-    all.push(...await getMessages(cfg, convo.id));
-  }
-  return all.filter((m) => m.dateAdded && !(m.messageType ?? "").includes("ACTIVITY")).sort((a, b) => new Date(a.dateAdded).getTime() - new Date(b.dateAdded).getTime());
-}
-function renderDossier(d, rank) {
-  const o = d.opportunity;
-  const lines = [];
-  const created = o.createdAt ? `created ${fmtDate(new Date(o.createdAt))}` : "creation date unknown";
-  lines.push(`### ${rank}. ${o.name ?? o.id} \u2014 ${fmtMoney(o.monetaryValue)} (${d.stageName}, ${created})`);
-  const c = d.contact;
-  const contactBits = [
-    c?.contactName || [c?.firstName, c?.lastName].filter(Boolean).join(" ") || o.contact?.name,
-    c?.phone ?? o.contact?.phone,
-    c?.email ?? o.contact?.email
-  ].filter(Boolean);
-  lines.push(`- **Contact:** ${contactBits.join(" \xB7 ") || o.contactId || "unknown"} (opportunity id ${o.id})`);
-  if (d.pickup.date) {
-    const days = Math.round((d.pickup.date.getTime() - Date.now()) / 864e5);
-    lines.push(`- **Pickup:** ${fmtDate(d.pickup.date)}${days >= 0 ? ` (in ${days} day${days === 1 ? "" : "s"})` : ""}`);
-  } else if (d.pickup.hasValue) {
-    lines.push(`- **Pickup:** "${d.pickup.raw}" (couldn't parse as a date)`);
-  } else {
-    lines.push(`- **Pickup:** not on file \u2014 likely a phone booking. Check the conversation below for a date they mentioned.`);
-  }
-  if (d.lastMessage && d.quietMinutes !== void 0) {
-    const dir = d.lastMessage.direction === "inbound" ? "they wrote last" : "we wrote last";
-    lines.push(`- **Last contact:** ${fmtMinutes(d.quietMinutes)} ago (${channelLabel(d.lastMessage.messageType)}, ${dir})`);
-  } else {
-    lines.push(`- **Last contact:** no conversation on record yet`);
-  }
-  if (d.cautions.length > 0) {
-    lines.push(`- **\u26A0\uFE0F Cautions:** ${d.cautions.join("; ")}`);
-  }
-  if (d.recent.length > 0) {
-    lines.push(`- **Recent conversation:**`);
-    for (const m of d.recent.slice(-EXCERPT_MESSAGES)) {
-      const who = m.direction === "inbound" ? "Customer" : "Us";
-      const arrow = m.direction === "inbound" ? "\u2192" : "\u2190";
-      const body = (m.body ?? "").replace(/\s+/g, " ").slice(0, 200) || `(${channelLabel(m.messageType)}, no text \u2014 likely a call)`;
-      lines.push(`  - ${arrow} **${who}** (${channelLabel(m.messageType)}, ${fmtDateTime(new Date(m.dateAdded))}): ${body}`);
-    }
-  }
-  if (d.fieldViews.length > 0) {
-    lines.push(`- **Trip details:** ${d.fieldViews.map((f) => `${f.name}: ${f.value}`).join(" \xB7 ")}`);
-  }
-  return lines.join("\n");
-}
-var getFollowupCandidatesTool = {
-  name: "get_followup_candidates",
-  title: "Get follow-up candidates",
-  description: "The follow-up workflow in one call: finds open opportunities with a future pickup date (or no pickup date on file \u2014 usually phone bookings, included and flagged) where NOBODY has communicated in the last quiet_hours (default 24h, either direction), ranked by value. Returns a complete dossier per candidate \u2014 contact, pickup, cautions like DND, conversation excerpt, trip details \u2014 ready for drafting follow-ups with prepare_send_message. Skip any candidate whose thread suggests a follow-up would be unwise (complaint, cancellation, do-not-disturb) and say why.",
-  kind: "read",
-  inputSchema: {
-    count: external_exports.number().int().min(1).max(10).default(5).describe("How many candidates to return."),
-    quiet_hours: external_exports.number().min(1).max(720).default(24).describe("Minimum hours since the last message in either direction."),
-    pipeline: external_exports.string().optional().describe("Limit to one pipeline by name."),
-    include_phone_bookings: external_exports.boolean().default(true).describe("Include opportunities with no pickup date on file (phone bookings).")
-  },
-  logArgs: (args) => ({
-    count: args.count,
-    quiet_hours: args.quiet_hours,
-    include_phone_bookings: args.include_phone_bookings
-  }),
-  handler: async ({ cfg }, args) => {
-    const problem = tenantProblem(cfg);
-    if (problem)
-      return problem;
-    const count = Math.min(10, Math.max(1, Number(args.count ?? 5)));
-    const quietMinutes = Number(args.quiet_hours ?? 24) * 60;
-    const includePhone = args.include_phone_bookings !== false;
-    try {
-      const pipelines = await getPipelines(cfg);
-      let pipelineId;
-      if (args.pipeline) {
-        const match = matchPipeline(pipelines, String(args.pipeline));
-        if (!match) {
-          return `No pipeline named "${args.pipeline}". Available: ${pipelines.map((p) => p.name).join(", ")}.`;
-        }
-        pipelineId = match.id;
-      }
-      const { opportunities } = await searchOpportunities(cfg, { status: "open", pipelineId });
-      const fieldNames = await getCustomFieldNames(cfg);
-      const todayStart = /* @__PURE__ */ new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      let pastPickup = 0;
-      let phoneBookings = 0;
-      const candidates = [];
-      for (const o of opportunities) {
-        if (!o.contactId)
-          continue;
-        const pickup = extractPickupDate(o, fieldNames);
-        if (pickup.date) {
-          if (pickup.date < todayStart) {
-            pastPickup++;
-            continue;
-          }
-          candidates.push({ o, pickup });
-        } else {
-          phoneBookings++;
-          if (includePhone)
-            candidates.push({ o, pickup });
-        }
-      }
-      candidates.sort((a, b) => (b.o.monetaryValue ?? 0) - (a.o.monetaryValue ?? 0));
-      if (candidates.length === 0) {
-        return `No follow-up candidates: of ${opportunities.length} open opportunities, ${pastPickup} have already-passed pickup dates and ${includePhone ? "none remain" : `${phoneBookings} have no pickup date on file (excluded by include_phone_bookings=false)`}.`;
-      }
-      const window = candidates.slice(0, Math.min(candidates.length, Math.max(count * 4, 20)));
-      const budget = new CallBudget(API_BUDGET2);
-      let recentlyContacted = 0;
-      let budgetStopped = false;
-      const dossiers = (await pooled(window, 4, async ({ o, pickup }) => {
-        const messages = await realMessages(cfg, o.contactId, budget);
-        if (messages === "budget") {
-          budgetStopped = true;
-          return null;
-        }
-        const last = messages[messages.length - 1];
-        let quiet;
-        if (last) {
-          quiet = (Date.now() - new Date(last.dateAdded).getTime()) / 6e4;
-          if (quiet < quietMinutes) {
-            recentlyContacted++;
-            return null;
-          }
-        }
-        let contact;
-        if (budget.take(1)) {
+  const deps = { cfg };
+  let noticePending = opts.notice !== void 0;
+  for (const tool of opts.tools) {
+    server.registerTool(tool.name, { title: tool.title, description: tool.description, inputSchema: tool.inputSchema }, async (rawArgs) => {
+      const args = rawArgs ?? {};
+      const logged = tool.logArgs?.(args);
+      const startedAt = Date.now();
+      try {
+        let text = await tool.handler(deps, args);
+        if (noticePending) {
+          noticePending = false;
           try {
-            contact = await getContact(cfg, o.contactId);
+            const extra = await opts.notice?.();
+            if (extra)
+              text = `${text}
+
+${extra}`;
           } catch {
           }
         }
-        const cautions = [];
-        if (contact?.dnd)
-          cautions.push("Do-Not-Disturb is ON for this contact \u2014 do not message without checking why");
-        if (!last)
-          cautions.push("no conversation history \u2014 nothing to reference, use the trip details");
-        const tagCautions = (contact?.tags ?? []).filter((t) => /cancel|refund|complaint|dnd|do.not/i.test(t));
-        if (tagCautions.length > 0)
-          cautions.push(`tags: ${tagCautions.join(", ")}`);
+        onToolCall?.({ tool: tool.name, ok: true, durationMs: Date.now() - startedAt, args: logged });
+        return { content: [{ type: "text", text }] };
+      } catch (err) {
+        onToolCall?.({ tool: tool.name, ok: false, durationMs: Date.now() - startedAt, args: logged });
         return {
-          opportunity: o,
-          stageName: stageNameFor2(pipelines, o),
-          pickup,
-          contact,
-          recent: messages,
-          lastMessage: last,
-          quietMinutes: quiet,
-          cautions,
-          fieldViews: opportunityFieldViews(o, fieldNames)
+          content: [
+            {
+              type: "text",
+              text: `Something went wrong inside Otto AI: ${err.message}. Try the check_connection tool to diagnose.`
+            }
+          ],
+          isError: true
         };
-      })).filter((d) => d !== null);
-      const kept = dossiers.slice(0, count + 3);
-      const lines = [];
-      lines.push(`## Follow-up candidates \u2014 quiet ${Math.round(quietMinutes / 60)}h+, highest value first`);
-      lines.push("");
-      lines.push(`From ${opportunities.length} open opportunities: ${candidates.length} eligible (${phoneBookings} phone bookings without a pickup date${includePhone ? ", included and flagged" : ", excluded"}; ${pastPickup} past-pickup excluded), ${recentlyContacted} skipped as contacted within ${Math.round(quietMinutes / 60)}h.`);
-      lines.push("");
-      if (kept.length === 0) {
-        lines.push("Every eligible opportunity has been contacted recently \u2014 nothing needs a follow-up right now. \u{1F44D}");
-        return lines.join("\n");
       }
-      kept.forEach((d, i) => {
-        lines.push(renderDossier(d, i + 1));
-        lines.push("");
-      });
-      lines.push("---");
-      lines.push(`*Draft follow-ups for the top ${Math.min(count, kept.length)} using prepare_send_message (sending always requires approval). Reference their conversation when there's real context; otherwise use the trip details. If a thread suggests following up would be imprudent (complaint, cancellation, DND), say so, skip it, and use the next candidate \u2014 extras are listed for exactly that.*`);
-      if (budgetStopped) {
-        lines.push("");
-        lines.push("*Note: the scan hit its API budget before checking every eligible opportunity \u2014 the largest deals were checked first.*");
-      }
-      return lines.join("\n");
-    } catch (err) {
-      if (err instanceof GhlError)
-        return `Couldn't build the follow-up list. ${err.friendly()}`;
-      throw err;
-    }
-  }
-};
-
-// dist/tools/ghl/getNewLeads.js
-async function getNewLeads(cfg, range) {
-  const problem = tenantProblem(cfg);
-  if (problem)
-    return problem;
-  let report;
-  try {
-    report = await buildLeadReport(cfg, range.start, range.end, range.deep ? DETAIL_LIMIT_MAX : DETAIL_LIMIT_DEFAULT);
-  } catch (err) {
-    if (err instanceof GhlError)
-      return `Couldn't pull leads from GoHighLevel. ${err.friendly()}`;
-    throw err;
-  }
-  const lines = [];
-  lines.push(`## New leads \u2014 ${range.label} (${fmtDate(range.start)} to ${fmtDate(range.end)})`);
-  lines.push("");
-  if (report.totalLeads === 0) {
-    lines.push("No new leads were created in GoHighLevel during this period.");
-    return lines.join("\n");
-  }
-  const pct = report.contactedCount / report.analyzed * 100;
-  lines.push(`**${report.totalLeads} new leads.** Of the ${report.analyzed} analyzed in detail:`);
-  lines.push(`- **Contacted:** ${report.contactedCount} of ${report.analyzed} (${pct.toFixed(0)}%)`);
-  if (report.medianResponseMinutes !== void 0) {
-    lines.push(`- **Typical (median) first response time:** ${fmtMinutes(report.medianResponseMinutes)}`);
-  }
-  if (report.respondedUnder5MinPct !== void 0) {
-    lines.push(`- **Responded within 5 minutes:** ${report.respondedUnder5MinPct.toFixed(0)}% of contacted leads`);
-  }
-  const channels = Object.entries(report.channelCounts).sort((a, b) => b[1] - a[1]);
-  if (channels.length > 0) {
-    lines.push(`- **First-touch channels:** ${channels.map(([c, n]) => `${c} (${n})`).join(", ")}`);
-  }
-  const responders = Object.entries(report.responderCounts).sort((a, b) => b[1] - a[1]);
-  if (responders.length > 0) {
-    lines.push(`- **Who responded first:** ${responders.map(([r, n]) => `${r} (${n})`).join(", ")}`);
-  }
-  lines.push("");
-  lines.push("| Lead | Came in | Source | First response | Channel | By |");
-  lines.push("|---|---|---|---|---|---|");
-  for (const l of report.leads) {
-    const response = l.responded ? l.firstResponseMinutes !== void 0 ? `after ${fmtMinutes(l.firstResponseMinutes)}` : "yes" : "**not yet contacted**";
-    lines.push(`| ${l.name} | ${fmtDateTime(l.createdAt)} | ${l.source ?? "\u2014"} | ${response} | ${l.channel ?? "\u2014"} | ${l.respondedBy ?? "\u2014"} |`);
-  }
-  if (report.truncated) {
-    lines.push("");
-    if (range.deep) {
-      lines.push(`*This range had ${report.totalLeads} leads \u2014 I deep-scanned the ${report.analyzed} most recent${report.hardCapHit ? " (the safety cap)" : ""}. For complete coverage, split it into shorter ranges and ask again.*`);
-    } else {
-      lines.push(`*Response details were checked for the ${report.analyzed} most recent leads; ${report.totalLeads - report.analyzed} more came in during this period. Tip: give me an exact date range (e.g. "June 1 to June 30") and I'll analyze every lead in it, up to 300.*`);
-    }
-  }
-  if (report.analysisErrors > 0) {
-    lines.push("");
-    lines.push(`*Note: response history couldn't be read for ${report.analysisErrors} lead(s).*`);
-  }
-  return lines.join("\n");
-}
-var getNewLeadsTool = {
-  name: "get_new_leads",
-  title: "Get new leads",
-  description: "Lists new leads that came into GoHighLevel during a period, with response status for each: whether anyone followed up, how fast, over which channel (SMS, email, call), and by whom. Also summarizes contact rate and typical response speed. Give start_date + end_date for a deep scan of everything in that range.",
-  kind: "read",
-  inputSchema: { period: periodArg, ...dateRangeArgs },
-  logArgs: logRangeArgs,
-  handler: ({ cfg }, args) => {
-    const range = resolveRangeArgs(args.period ?? "last_7_days", args);
-    if ("error" in range)
-      return Promise.resolve(range.error);
-    return getNewLeads(cfg, range);
-  }
-};
-
-// dist/tools/ghl/getPipelineOverview.js
-var money = (n) => `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
-var getPipelineOverviewTool = {
-  name: "get_pipeline_overview",
-  title: "Get pipeline overview",
-  description: "Shows every sales pipeline stage by stage: how many opportunities sit in each stage and their total dollar value, plus won/lost counts. The at-a-glance state of the book of business.",
-  kind: "read",
-  inputSchema: {
-    pipeline: external_exports.string().optional().describe("Limit to one pipeline by name (default: all).")
-  },
-  logArgs: (args) => args.pipeline ? { pipeline: args.pipeline } : {},
-  handler: async ({ cfg }, args) => {
-    const problem = tenantProblem(cfg);
-    if (problem)
-      return problem;
-    try {
-      const pipelines = await getPipelines(cfg);
-      if (pipelines.length === 0)
-        return "This account has no sales pipelines set up.";
-      let selected = pipelines;
-      if (args.pipeline) {
-        const match = matchPipeline(pipelines, String(args.pipeline));
-        if (!match) {
-          return `No pipeline named "${args.pipeline}". Available: ${pipelines.map((p) => p.name).join(", ")}.`;
-        }
-        selected = [match];
-      }
-      const { opportunities, total } = await searchOpportunities(cfg, {
-        pipelineId: selected.length === 1 ? selected[0].id : void 0
-      });
-      const lines = [];
-      for (const pipeline of selected) {
-        const inPipeline = opportunities.filter((o) => o.pipelineId === pipeline.id);
-        lines.push(`## ${pipeline.name} (${inPipeline.length} opportunities)`);
-        lines.push("");
-        lines.push("| Stage | Open | Value |");
-        lines.push("|---|---|---|");
-        for (const stage of pipeline.stages) {
-          const open = inPipeline.filter((o) => o.pipelineStageId === stage.id && (o.status ?? "open") === "open");
-          const value = open.reduce((sum, o) => sum + (o.monetaryValue ?? 0), 0);
-          lines.push(`| ${stage.name} | ${open.length} | ${money(value)} |`);
-        }
-        const won = inPipeline.filter((o) => o.status === "won");
-        const lost = inPipeline.filter((o) => o.status === "lost");
-        const wonValue = won.reduce((sum, o) => sum + (o.monetaryValue ?? 0), 0);
-        lines.push("");
-        lines.push(`**Won:** ${won.length} (${money(wonValue)}) \xB7 **Lost:** ${lost.length}`);
-        lines.push("");
-      }
-      if (total !== void 0 && total > opportunities.length) {
-        lines.push(`*Based on the ${opportunities.length} most recent of ${total} total opportunities.*`);
-      }
-      return lines.join("\n").trim();
-    } catch (err) {
-      if (err instanceof GhlError)
-        return `Couldn't read the pipelines. ${err.friendly()}`;
-      throw err;
-    }
-  }
-};
-
-// dist/tools/ghl/getWeeklyNumbers.js
-async function getWeeklyNumbers(cfg, range) {
-  const problem = tenantProblem(cfg);
-  if (problem)
-    return problem;
-  let leadsCount = 0;
-  let appointmentsLine;
-  let winsLine;
-  let revenueLine;
-  try {
-    const window = await getContactsAddedBetween(cfg, range.start, range.end);
-    leadsCount = Math.max(window.total ?? 0, window.contacts.length);
-  } catch (err) {
-    if (err instanceof GhlError)
-      return `Couldn't pull this week's numbers. ${err.friendly()}`;
-    throw err;
-  }
-  try {
-    const events = await getCalendarEvents(cfg, range.start, range.end);
-    const cancelled = events.filter((e) => e.appointmentStatus === "cancelled").length;
-    appointmentsLine = `**Appointments on the calendar:** ${events.length - cancelled}${cancelled > 0 ? ` (plus ${cancelled} cancelled)` : ""}`;
-  } catch {
-    appointmentsLine = "**Appointments:** couldn't be read (the token may be missing the calendar scope \u2014 run check_connection).";
-  }
-  try {
-    const opportunities = await getOpportunities(cfg);
-    const inWindow = (dateStr) => {
-      if (!dateStr)
-        return false;
-      const d = new Date(dateStr);
-      return d >= range.start && d <= range.end;
-    };
-    const won = opportunities.filter((o) => o.status === "won" && inWindow(o.lastStatusChangeAt ?? o.updatedAt));
-    const revenue = won.reduce((sum, o) => sum + (o.monetaryValue ?? 0), 0);
-    const newOpps = opportunities.filter((o) => inWindow(o.createdAt));
-    winsLine = `**Bookings won:** ${won.length} (out of ${newOpps.length} new pipeline opportunities this week)`;
-    revenueLine = `**Revenue from won bookings (where a value was recorded):** $${revenue.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
-  } catch {
-    winsLine = "**Bookings won:** couldn't be read (the token may be missing the opportunities scope \u2014 run check_connection).";
-    revenueLine = "**Revenue:** unavailable for the same reason.";
-  }
-  return [
-    `## ${range.deep ? "Numbers" : "Weekly numbers"} (${fmtDate(range.start)} \u2013 ${fmtDate(range.end)})`,
-    "",
-    `- **New leads:** ${leadsCount}`,
-    `- ${appointmentsLine}`,
-    `- ${winsLine}`,
-    `- ${revenueLine}`,
-    `- **Ad spend & attribution:** not connected in this proof of concept (comes from BigQuery in the hosted version).`,
-    "",
-    '*Revenue only counts opportunities marked "won" in GoHighLevel with a dollar value filled in \u2014 actual revenue may be higher.*'
-  ].join("\n");
-}
-var getWeeklyNumbersTool = {
-  name: "get_weekly_numbers",
-  title: "Get weekly numbers",
-  description: "The last 7 days at a glance: new leads, appointments on the calendar, bookings won, and revenue recorded in GoHighLevel. Give start_date + end_date to run the same numbers for any custom window instead.",
-  kind: "read",
-  inputSchema: { ...dateRangeArgs },
-  logArgs: logRangeArgs,
-  handler: ({ cfg }, args) => {
-    const range = resolveRangeArgs("last_7_days", args);
-    if ("error" in range)
-      return Promise.resolve(range.error);
-    return getWeeklyNumbers(cfg, range);
-  }
-};
-
-// dist/tools/ghl/listAppointments.js
-var DAY_MS2 = 24 * 60 * 60 * 1e3;
-var NAME_LOOKUP_CAP = 25;
-var listAppointmentsTool = {
-  name: "list_appointments",
-  title: "List appointments",
-  description: "Lists calendar appointments in a window \u2014 who, when, which calendar, and status. Defaults to the NEXT 7 days; give a period for past windows or start_date + end_date for any range (future allowed).",
-  kind: "read",
-  inputSchema: { period: periodArg, ...dateRangeArgs },
-  logArgs: logRangeArgs,
-  handler: async ({ cfg }, args) => {
-    const problem = tenantProblem(cfg);
-    if (problem)
-      return problem;
-    let start;
-    let end;
-    let label;
-    if (!args.period && !args.start_date && !args.end_date) {
-      const now = /* @__PURE__ */ new Date();
-      start = now;
-      end = new Date(now.getTime() + 7 * DAY_MS2);
-      label = "the next 7 days";
-    } else {
-      const range = resolveRangeArgs(args.period ?? "last_7_days", args, {
-        allowFuture: true
-      });
-      if ("error" in range)
-        return range.error;
-      ({ start, end, label } = range);
-    }
-    try {
-      const events = (await getCalendarEvents(cfg, start, end)).sort((a, b) => new Date(a.startTime ?? 0).getTime() - new Date(b.startTime ?? 0).getTime());
-      if (events.length === 0) {
-        return `No appointments on the calendar for ${label} (${fmtDate(start)} \u2013 ${fmtDate(end)}).`;
-      }
-      const names = /* @__PURE__ */ new Map();
-      const idsToResolve = [
-        ...new Set(events.slice(0, NAME_LOOKUP_CAP).map((e) => e.contactId).filter(Boolean))
-      ];
-      await pooled(idsToResolve, 4, async (id) => {
-        try {
-          const contact = await getContact(cfg, id);
-          if (contact)
-            names.set(id, contactDisplayName(contact));
-        } catch {
-        }
-      });
-      const lines = [`## Appointments \u2014 ${label} (${events.length})`, ""];
-      for (const e of events.slice(0, 50)) {
-        const when = e.startTime ? fmtDateTime(new Date(e.startTime)) : "time unknown";
-        const who = e.contactId ? names.get(e.contactId) ?? "" : "";
-        const status = e.appointmentStatus && e.appointmentStatus !== "confirmed" ? ` \u2014 ${e.appointmentStatus}` : "";
-        const calendar = e.calendarName ? ` (${e.calendarName})` : "";
-        lines.push(`- **${when}**${who ? ` \u2014 ${who}` : ""}${e.title ? `: ${e.title}` : ""}${calendar}${status}`);
-      }
-      if (events.length > 50) {
-        lines.push("");
-        lines.push(`*Showing the first 50 of ${events.length} \u2014 narrow the range for the rest.*`);
-      }
-      return lines.join("\n");
-    } catch (err) {
-      if (err instanceof GhlError)
-        return `Couldn't read the calendar. ${err.friendly()}`;
-      throw err;
-    }
-  }
-};
-
-// dist/tools/ghl/listOpportunities.js
-function stageNameFor3(pipelines, o) {
-  const pipeline = pipelines.find((p) => p.id === o.pipelineId);
-  return pipeline?.stages.find((s) => s.id === o.pipelineStageId)?.name ?? "\u2014";
-}
-function lastActivity(o) {
-  const raw = o.lastActionDate ?? o.updatedAt;
-  if (!raw)
-    return void 0;
-  const d = new Date(raw);
-  return isNaN(d.getTime()) ? void 0 : d;
-}
-function parseDay(s, endOfDay) {
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m)
-    return void 0;
-  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  if (isNaN(d.getTime()))
-    return void 0;
-  if (endOfDay)
-    d.setHours(23, 59, 59, 999);
-  return d;
-}
-var listOpportunitiesTool = {
-  name: "list_opportunities",
-  title: "List opportunities",
-  description: "Lists individual opportunities (deals) with real values, creation dates, stage, pickup date, and the attached contact \u2014 sortable by value, creation date, or recent activity. Use this for any 'top N deals', 'opportunities created since X', or 'biggest open deals' question. Filter by status, pipeline name, or a created-date range.",
-  kind: "read",
-  inputSchema: {
-    status: external_exports.enum(["open", "won", "lost", "abandoned", "all"]).default("open").describe("Opportunity status to include."),
-    sort: external_exports.enum(["value", "created", "recent_activity"]).default("value").describe("value: highest $ first. created: newest first. recent_activity: most recently touched first."),
-    pipeline: external_exports.string().optional().describe("Limit to one pipeline by name."),
-    limit: external_exports.number().int().min(1).max(40).default(10).describe("How many to show."),
-    ...dateRangeArgs
-  },
-  logArgs: (args) => ({
-    ...logRangeArgs(args),
-    status: args.status,
-    sort: args.sort,
-    limit: args.limit
-  }),
-  handler: async ({ cfg }, args) => {
-    const problem = tenantProblem(cfg);
-    if (problem)
-      return problem;
-    const status = String(args.status ?? "open");
-    const sort = String(args.sort ?? "value");
-    const limit = Math.min(40, Math.max(1, Number(args.limit ?? 10)));
-    try {
-      const pipelines = await getPipelines(cfg);
-      let pipelineId;
-      if (args.pipeline) {
-        const match = matchPipeline(pipelines, String(args.pipeline));
-        if (!match) {
-          return `No pipeline named "${args.pipeline}". Available: ${pipelines.map((p) => p.name).join(", ")}.`;
-        }
-        pipelineId = match.id;
-      }
-      const { opportunities } = await searchOpportunities(cfg, {
-        status: status === "all" ? void 0 : status,
-        pipelineId
-      });
-      let filtered = opportunities;
-      let rangeNote = "";
-      const start = args.start_date ? parseDay(String(args.start_date), false) : void 0;
-      const end = args.end_date ? parseDay(String(args.end_date), true) : void 0;
-      if (args.start_date && !start || args.end_date && !end) {
-        return "Dates must be YYYY-MM-DD (e.g. 2026-08-11).";
-      }
-      if (start || end) {
-        filtered = filtered.filter((o) => {
-          if (!o.createdAt)
-            return false;
-          const created = new Date(o.createdAt);
-          return (!start || created >= start) && (!end || created <= end);
-        });
-        rangeNote = ` created ${start ? fmtDate(start) : "\u2026"} \u2013 ${end ? fmtDate(end) : "now"}`;
-      }
-      filtered.sort((a, b) => {
-        if (sort === "created") {
-          return new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime();
-        }
-        if (sort === "recent_activity") {
-          return (lastActivity(b)?.getTime() ?? 0) - (lastActivity(a)?.getTime() ?? 0);
-        }
-        return (b.monetaryValue ?? 0) - (a.monetaryValue ?? 0);
-      });
-      if (filtered.length === 0) {
-        return `No ${status === "all" ? "" : status + " "}opportunities found${rangeNote || (args.pipeline ? ` in pipeline "${args.pipeline}"` : "")}.`;
-      }
-      const fieldNames = await getCustomFieldNames(cfg);
-      const shown = filtered.slice(0, limit);
-      const lines = [];
-      const sortLabel = sort === "created" ? "newest first" : sort === "recent_activity" ? "most recently active first" : "highest value first";
-      lines.push(`## ${status === "all" ? "All" : status[0].toUpperCase() + status.slice(1)} opportunities${rangeNote} (${sortLabel})`);
-      lines.push("");
-      lines.push(`| # | Opportunity | Contact | Value | Stage | Created | Pickup date |`);
-      lines.push("|---|---|---|---|---|---|---|");
-      shown.forEach((o, i) => {
-        const contact = o.contact?.name || o.contact?.email || o.contact?.phone || "\u2014";
-        const created = o.createdAt ? fmtDate(new Date(o.createdAt)) : "\u2014";
-        const pickup = extractPickupDate(o, fieldNames);
-        const pickupLabel = pickup.date ? fmtDate(pickup.date) : pickup.raw ?? "\u2014";
-        lines.push(`| ${i + 1} | ${o.name ?? o.id} | ${contact} | ${fmtMoney(o.monetaryValue)} | ${stageNameFor3(pipelines, o)} | ${created} | ${pickupLabel} |`);
-      });
-      lines.push("");
-      lines.push(`*Showing ${shown.length} of ${filtered.length} matching opportunities${filtered.length > shown.length ? " \u2014 raise limit to see more" : ""}. A "\u2014" pickup date usually means the booking came in by phone.*`);
-      return lines.join("\n");
-    } catch (err) {
-      if (err instanceof GhlError)
-        return `Couldn't list opportunities. ${err.friendly()}`;
-      throw err;
-    }
-  }
-};
-
-// dist/tools/ghl/listTeam.js
-var listTeamTool = {
-  name: "list_team",
-  title: "List team members",
-  description: "Lists the team members on this GoHighLevel account with their contact details \u2014 useful for 'who responded' context and task assignment.",
-  kind: "read",
-  inputSchema: {},
-  handler: async ({ cfg }) => {
-    const problem = tenantProblem(cfg);
-    if (problem)
-      return problem;
-    try {
-      const users = await listUsersDetailed(cfg);
-      if (users.length === 0)
-        return "No team members are visible on this account.";
-      const lines = [`## Team (${users.length})`, ""];
-      for (const u of users) {
-        const details = [u.email, u.phone, u.roles?.role].filter(Boolean).join(" \xB7 ");
-        lines.push(`- **${u.name}**${details ? ` \u2014 ${details}` : ""}`);
-      }
-      return lines.join("\n");
-    } catch (err) {
-      if (err instanceof GhlError)
-        return `Couldn't read the team list. ${err.friendly()}`;
-      throw err;
-    }
-  }
-};
-
-// dist/tools/ghl/listWorkflows.js
-var listWorkflowsTool = {
-  name: "list_workflows",
-  title: "List workflows",
-  description: "Lists the automation workflows on this GoHighLevel account and whether each is active \u2014 useful for diagnosing why leads did or didn't get automated follow-up.",
-  kind: "read",
-  inputSchema: {},
-  handler: async ({ cfg }) => {
-    const problem = tenantProblem(cfg);
-    if (problem)
-      return problem;
-    try {
-      const workflows = await listWorkflows(cfg);
-      if (workflows.length === 0)
-        return "No automation workflows are set up on this account.";
-      const lines = [`## Workflows (${workflows.length})`, ""];
-      for (const w of workflows) {
-        const status = w.status ? ` \u2014 ${w.status}` : "";
-        lines.push(`- **${w.name ?? w.id}**${status}`);
-      }
-      return lines.join("\n");
-    } catch (err) {
-      if (err instanceof GhlError)
-        return `Couldn't read the workflows. ${err.friendly()}`;
-      throw err;
-    }
-  }
-};
-
-// dist/tools/ghl/prepareAddNote.js
-var prepareAddNoteTool = {
-  name: "prepare_add_note",
-  title: "Prepare a contact note (needs confirmation)",
-  description: "Prepares adding an internal note to ONE contact's record and returns a preview with a confirmation code. NOTHING is saved by this tool \u2014 the operator must approve, then confirm_action applies it. Notes are internal; the customer never sees them.",
-  kind: "write",
-  inputSchema: {
-    contact: external_exports.string().describe("Who: a contact ID, email, phone, or name."),
-    note: external_exports.string().min(1).max(5e3).describe("The note text to save on the contact.")
-  },
-  logArgs: () => ({}),
-  handler: async ({ cfg, gate }, args) => {
-    const problem = tenantProblem(cfg);
-    if (problem)
-      return problem;
-    if (!gate)
-      return NO_WRITES_MESSAGE;
-    const note = String(args.note ?? "").trim();
-    if (!note)
-      return "The note is empty \u2014 write what should be saved.";
-    try {
-      const res = await resolveContact(cfg, String(args.contact ?? ""));
-      const miss = describeResolutionMiss(String(args.contact ?? ""), res);
-      if (miss)
-        return miss;
-      if (res.kind !== "found")
-        return "No contact found.";
-      const contact = res.contact;
-      const name = contactDisplayName(contact);
-      const preview = [`--- CONFIRM: Add note ---`, `Contact: ${name}`, "Note:", `"${note}"`].join("\n");
-      const prepared = await preparePendingAction(gate, {
-        actionType: "add_note",
-        payload: { contactId: contact.id, contactName: name, note },
-        preview
-      });
-      return preview + "\n" + confirmFooter(prepared.code, prepared.expiresAt);
-    } catch (err) {
-      if (err instanceof GhlError)
-        return `Couldn't prepare that note. ${err.friendly()}`;
-      throw err;
-    }
-  }
-};
-
-// dist/tools/ghl/prepareCreateOpportunity.js
-var fmtMoney2 = (n) => `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
-function resolvePipeline(pipelines, requested) {
-  if (requested) {
-    const pipeline = matchPipeline(pipelines, requested);
-    if (!pipeline) {
-      return {
-        problem: `There's no pipeline named "${requested}". The pipelines are: ${pipelines.map((p) => p.name).join(", ")}.`
-      };
-    }
-    return { pipeline };
-  }
-  if (pipelines.length === 1)
-    return { pipeline: pipelines[0] };
-  return {
-    problem: `This account has ${pipelines.length} pipelines \u2014 which one? (${pipelines.map((p) => p.name).join(", ")})`
-  };
-}
-var prepareCreateOpportunityTool = {
-  name: "prepare_create_opportunity",
-  title: "Prepare a new opportunity (needs confirmation)",
-  description: "Prepares creating ONE new opportunity (deal) for a contact in a pipeline, and returns a preview with a confirmation code. NOTHING is created by this tool \u2014 the operator must approve, then confirm_action applies it. The deal is always created with status open; use prepare_move_opportunity afterwards to mark it won/lost.",
-  kind: "write",
-  inputSchema: {
-    contact: external_exports.string().describe("Who the deal is for: a contact ID, name, email, or phone number."),
-    pipeline: external_exports.string().optional().describe("Pipeline name. Optional when there is exactly one pipeline."),
-    stage: external_exports.string().optional().describe("Stage name within that pipeline. Defaults to the pipeline's first stage."),
-    name: external_exports.string().optional().describe("Name for the opportunity. Defaults to the contact's name."),
-    value: external_exports.number().nonnegative().optional().describe("Deal value in dollars (monetary value), if known."),
-    source: external_exports.string().optional().describe("Lead source to record on the deal, if the operator gave one."),
-    allow_duplicate: external_exports.boolean().default(false).describe("Set true ONLY when the operator explicitly wants a second open deal for a contact who already has one in this pipeline.")
-  },
-  logArgs: (args) => ({ pipeline: args.pipeline, stage: args.stage, value: args.value }),
-  handler: async ({ cfg, gate }, args) => {
-    const problem = tenantProblem(cfg);
-    if (problem)
-      return problem;
-    if (!gate)
-      return NO_WRITES_MESSAGE;
-    try {
-      const res = await resolveContact(cfg, String(args.contact ?? ""));
-      const miss = describeResolutionMiss(String(args.contact ?? ""), res);
-      if (miss || res.kind !== "found")
-        return miss ?? "I couldn't resolve that contact.";
-      const contact = res.contact;
-      const contactName = contactDisplayName(contact);
-      const pipelines = await getPipelines(cfg);
-      if (pipelines.length === 0) {
-        return "This account has no pipelines set up in GoHighLevel, so there's nowhere to create an opportunity. Create a pipeline in GHL first.";
-      }
-      const picked = resolvePipeline(pipelines, args.pipeline ? String(args.pipeline) : void 0);
-      if (!picked.pipeline)
-        return picked.problem;
-      const pipeline = picked.pipeline;
-      let stage = pipeline.stages[0];
-      if (args.stage) {
-        const match = matchStage(pipeline, String(args.stage));
-        if (!match) {
-          return `Pipeline "${pipeline.name}" has no stage named "${args.stage}". Its stages are: ${pipeline.stages.map((s) => s.name).join(", ")}.`;
-        }
-        stage = match;
-      }
-      if (!stage) {
-        return `Pipeline "${pipeline.name}" has no stages, so a deal can't be placed in it. Add stages to it in GoHighLevel first.`;
-      }
-      const { opportunities } = await searchOpportunities(cfg, {
-        status: "open",
-        pipelineId: pipeline.id,
-        maxPages: 3
-      });
-      const existing = opportunities.filter((o) => o.contactId === contact.id || o.contact?.id === contact.id);
-      if (existing.length > 0 && !args.allow_duplicate) {
-        const lines = existing.slice(0, 5).map((o) => `- ${o.name ?? "(unnamed)"}${o.monetaryValue ? ` \u2014 ${fmtMoney2(o.monetaryValue)}` : ""}, id ${o.id}`);
-        return `${contactName} already has ${existing.length === 1 ? "an open deal" : `${existing.length} open deals`} in pipeline "${pipeline.name}":
-${lines.join("\n")}
-I won't create a duplicate unless the operator explicitly wants one \u2014 if they do, prepare this again with allow_duplicate set to true. (Don't call confirm_action; there is nothing to confirm yet.)`;
-      }
-      const oppName = args.name ? String(args.name) : contactName;
-      const value = typeof args.value === "number" ? args.value : void 0;
-      const source = args.source ? String(args.source) : void 0;
-      const payload = {
-        contactId: contact.id,
-        contactName,
-        name: oppName,
-        pipelineId: pipeline.id,
-        pipelineName: pipeline.name,
-        pipelineStageId: stage.id,
-        stageName: stage.name,
-        ...value !== void 0 ? { monetaryValue: value } : {},
-        ...source ? { source } : {}
-      };
-      const preview = [
-        `--- CONFIRM: Create opportunity ---`,
-        `Create "${oppName}" for ${contactName} in pipeline "${pipeline.name}", stage "${stage.name}" (status: open)`,
-        ...value !== void 0 ? [`Value: ${fmtMoney2(value)}`] : [],
-        ...source ? [`Source: ${source}`] : [],
-        ...existing.length > 0 ? [`\u26A0 ${contactName} already has ${existing.length} open deal(s) in this pipeline \u2014 this creates another one.`] : []
-      ].join("\n");
-      const prepared = await preparePendingAction(gate, {
-        actionType: "create_opportunity",
-        payload,
-        preview
-      });
-      return preview + "\n" + confirmFooter(prepared.code, prepared.expiresAt);
-    } catch (err) {
-      if (err instanceof GhlError)
-        return `Couldn't prepare that opportunity. ${err.friendly()}`;
-      throw err;
-    }
-  }
-};
-
-// dist/tools/ghl/prepareMoveOpportunity.js
-var LOOKS_LIKE_ID2 = /^[A-Za-z0-9]{15,}$/;
-var TERMINAL = /* @__PURE__ */ new Set(["won", "lost", "abandoned"]);
-var norm2 = (s) => s.trim().toLowerCase();
-async function resolveOpportunity(cfg, ref) {
-  const trimmed = ref.trim();
-  if (LOOKS_LIKE_ID2.test(trimmed)) {
-    try {
-      const opp = await getOpportunity(cfg, trimmed);
-      if (opp?.id)
-        return { kind: "found", opportunity: opp };
-    } catch {
-    }
-  }
-  const { opportunities } = await searchOpportunities(cfg, { maxPages: 3 });
-  const exact = opportunities.filter((o) => norm2(o.name ?? "") === norm2(trimmed));
-  const matches2 = exact.length > 0 ? exact : opportunities.filter((o) => norm2(o.name ?? "").includes(norm2(trimmed)));
-  if (matches2.length === 0)
-    return { kind: "none" };
-  if (matches2.length > 1)
-    return { kind: "ambiguous", candidates: matches2.slice(0, 5) };
-  return { kind: "found", opportunity: matches2[0] };
-}
-function describeStage(pipelines, o) {
-  const pipeline = pipelines.find((p) => p.id === o.pipelineId);
-  return { pipeline, stageName: pipeline?.stages.find((s) => s.id === o.pipelineStageId)?.name };
-}
-var prepareMoveOpportunityTool = {
-  name: "prepare_move_opportunity",
-  title: "Prepare an opportunity update (needs confirmation)",
-  description: "Prepares moving ONE opportunity to another pipeline stage, or marking it won/lost, and returns a preview with a confirmation code. NOTHING is changed by this tool \u2014 the operator must approve, then confirm_action applies it. Give exactly one of to_stage or mark.",
-  kind: "write",
-  inputSchema: {
-    opportunity: external_exports.string().describe("Which deal: an opportunity ID or its name."),
-    to_stage: external_exports.string().optional().describe("Target stage name within the deal's own pipeline."),
-    mark: external_exports.enum(["won", "lost"]).optional().describe("Mark the deal won or lost instead of moving stages."),
-    allow_reopen: external_exports.boolean().default(false).describe("Set true ONLY when the operator explicitly wants to change a deal already marked won/lost.")
-  },
-  logArgs: (args) => ({ to_stage: args.to_stage, mark: args.mark }),
-  handler: async ({ cfg, gate }, args) => {
-    const problem = tenantProblem(cfg);
-    if (problem)
-      return problem;
-    if (!gate)
-      return NO_WRITES_MESSAGE;
-    const toStage = args.to_stage ? String(args.to_stage) : void 0;
-    const mark = args.mark ? String(args.mark) : void 0;
-    if (toStage && mark || !toStage && !mark) {
-      return "Give exactly one of to_stage (move it) or mark (won/lost).";
-    }
-    try {
-      const res = await resolveOpportunity(cfg, String(args.opportunity ?? ""));
-      if (res.kind === "none") {
-        return `I couldn't find an opportunity matching "${args.opportunity}". Try its exact name or ID (get_pipeline_overview and get_awaiting_reply show them).`;
-      }
-      if (res.kind === "ambiguous") {
-        const lines = res.candidates.map((o) => `- ${o.name ?? "(unnamed)"} \u2014 ${o.status ?? "open"}, id ${o.id}`);
-        return `I found ${res.candidates.length} opportunities matching "${args.opportunity}" \u2014 which one?
-${lines.join("\n")}`;
-      }
-      const opp = res.opportunity;
-      const pipelines = await getPipelines(cfg);
-      const { pipeline, stageName } = describeStage(pipelines, opp);
-      const label = `"${opp.name ?? opp.id}"${opp.monetaryValue ? ` \u2014 $${opp.monetaryValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : ""}`;
-      const currentStatus = (opp.status ?? "open").toLowerCase();
-      const reopening = TERMINAL.has(currentStatus);
-      if (reopening && !args.allow_reopen) {
-        return `${label} is already marked ${currentStatus.toUpperCase()}. I won't change a closed deal unless the operator explicitly wants to reopen it \u2014 if they do, prepare this again with allow_reopen set to true. (Don't call confirm_action; there is nothing to confirm yet.)`;
-      }
-      let payload;
-      let action;
-      if (mark) {
-        payload = { opportunityId: opp.id, opportunityName: opp.name ?? opp.id, status: mark };
-        action = `Mark ${label} as ${mark.toUpperCase()} (stage stays "${stageName ?? "unknown"}")`;
-      } else {
-        if (!pipeline) {
-          return `I couldn't determine which pipeline ${label} belongs to, so a stage move isn't safe. Check it in GoHighLevel directly.`;
-        }
-        const target = matchStage(pipeline, toStage);
-        if (!target) {
-          return `Pipeline "${pipeline.name}" has no stage named "${toStage}". Its stages are: ${pipeline.stages.map((s) => s.name).join(", ")}.`;
-        }
-        payload = {
-          opportunityId: opp.id,
-          opportunityName: opp.name ?? opp.id,
-          pipelineStageId: target.id,
-          stageName: target.name
-        };
-        action = `Move ${label} from "${stageName ?? "unknown"}" to "${target.name}" in pipeline "${pipeline.name}"`;
-      }
-      const preview = [
-        `--- CONFIRM: Update opportunity ---`,
-        action,
-        ...reopening ? [`\u26A0 This deal is currently marked ${currentStatus.toUpperCase()} \u2014 this will reopen/alter a closed deal.`] : []
-      ].join("\n");
-      const prepared = await preparePendingAction(gate, {
-        actionType: "move_opportunity",
-        payload,
-        preview
-      });
-      return preview + "\n" + confirmFooter(prepared.code, prepared.expiresAt);
-    } catch (err) {
-      if (err instanceof GhlError)
-        return `Couldn't prepare that update. ${err.friendly()}`;
-      throw err;
-    }
-  }
-};
-
-// dist/tools/ghl/prepareSendMessage.js
-function escapeHtml2(value) {
-  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
-}
-var prepareSendMessageTool = {
-  name: "prepare_send_message",
-  title: "Prepare a message (needs confirmation)",
-  description: "Drafts an SMS or email reply to ONE contact and returns a preview with a confirmation code. NOTHING is sent by this tool. Show the preview to the operator; only after they explicitly approve, call confirm_action \u2014 never in the same turn.",
-  kind: "write",
-  inputSchema: {
-    contact: external_exports.string().describe("Who: a contact ID, email, phone, or name."),
-    channel: external_exports.enum(["sms", "email"]).describe("How to send it."),
-    message: external_exports.string().min(1).max(3e3).describe("The exact message text to send."),
-    subject: external_exports.string().max(200).optional().describe("Email subject (required for email).")
-  },
-  logArgs: (args) => ({ channel: args.channel }),
-  handler: async ({ cfg, gate }, args) => {
-    const problem = tenantProblem(cfg);
-    if (problem)
-      return problem;
-    if (!gate)
-      return NO_WRITES_MESSAGE;
-    const channel = String(args.channel);
-    const message = String(args.message ?? "").trim();
-    const subject = args.subject ? String(args.subject).trim() : void 0;
-    if (!message)
-      return "The message text is empty \u2014 write what should be sent.";
-    if (channel === "email" && !subject) {
-      return "Emails need a subject line \u2014 add a subject and prepare again.";
-    }
-    try {
-      const res = await resolveContact(cfg, String(args.contact ?? ""));
-      const miss = describeResolutionMiss(String(args.contact ?? ""), res);
-      if (miss)
-        return miss;
-      if (res.kind !== "found")
-        return "No contact found.";
-      const contact = res.contact;
-      const name = contactDisplayName(contact);
-      if (contact.dnd) {
-        return `${name} has "do not disturb" turned on in GoHighLevel \u2014 they opted out of messages, so Otto won't prepare one.`;
-      }
-      if (channel === "sms" && !contact.phone) {
-        return `${name} has no phone number on file, so an SMS can't be sent. Try email instead, or update their contact record first.`;
-      }
-      if (channel === "email" && !contact.email) {
-        return `${name} has no email address on file, so an email can't be sent. Try SMS instead, or update their contact record first.`;
-      }
-      const payload = channel === "sms" ? { contactId: contact.id, contactName: name, message } : {
-        contactId: contact.id,
-        contactName: name,
-        subject,
-        html: escapeHtml2(message).replaceAll("\n", "<br>"),
-        text: message
-      };
-      const previewLines = [
-        `--- CONFIRM: Send ${channel === "sms" ? "SMS" : "Email"} ---`,
-        `To: ${name} (${channel === "sms" ? contact.phone : contact.email})`,
-        ...channel === "email" ? [`Subject: ${subject}`] : [],
-        "Message:",
-        `"${message}"`,
-        ...channel === "sms" ? [`(${message.length} characters, ${Math.max(1, Math.ceil(message.length / 160))} SMS segment(s))`] : []
-      ];
-      const preview = previewLines.join("\n");
-      const prepared = await preparePendingAction(gate, {
-        actionType: channel === "sms" ? "send_sms" : "send_email",
-        payload,
-        preview
-      });
-      return preview + "\n" + confirmFooter(prepared.code, prepared.expiresAt);
-    } catch (err) {
-      if (err instanceof GhlError)
-        return `Couldn't prepare that message. ${err.friendly()}`;
-      throw err;
-    }
-  }
-};
-
-// dist/tools/ghl/prepareUpdateTags.js
-var prepareUpdateTagsTool = {
-  name: "prepare_update_tags",
-  title: "Prepare a tag change (needs confirmation)",
-  description: "Prepares adding and/or removing tags on ONE contact and returns a preview with a confirmation code. NOTHING is changed by this tool \u2014 the operator must approve, then confirm_action applies it.",
-  kind: "write",
-  inputSchema: {
-    contact: external_exports.string().describe("Who: a contact ID, email, phone, or name."),
-    add: external_exports.array(external_exports.string().min(1)).default([]).describe("Tags to add."),
-    remove: external_exports.array(external_exports.string().min(1)).default([]).describe("Tags to remove.")
-  },
-  logArgs: (args) => ({
-    add_count: Array.isArray(args.add) ? args.add.length : 0,
-    remove_count: Array.isArray(args.remove) ? args.remove.length : 0
-  }),
-  handler: async ({ cfg, gate }, args) => {
-    const problem = tenantProblem(cfg);
-    if (problem)
-      return problem;
-    if (!gate)
-      return NO_WRITES_MESSAGE;
-    const add = (args.add ?? []).map((t) => t.trim()).filter(Boolean);
-    const remove = (args.remove ?? []).map((t) => t.trim()).filter(Boolean);
-    if (add.length === 0 && remove.length === 0) {
-      return "Tell me which tags to add or remove.";
-    }
-    try {
-      const res = await resolveContact(cfg, String(args.contact ?? ""));
-      const miss = describeResolutionMiss(String(args.contact ?? ""), res);
-      if (miss)
-        return miss;
-      if (res.kind !== "found")
-        return "No contact found.";
-      const contact = res.contact;
-      const name = contactDisplayName(contact);
-      const alreadyThere = add.filter((t) => contact.tags?.includes(t));
-      const notThere = remove.filter((t) => !contact.tags?.includes(t));
-      const previewLines = [
-        `--- CONFIRM: Update tags ---`,
-        `Contact: ${name} (current tags: ${contact.tags?.join(", ") || "none"})`,
-        ...add.length > 0 ? [`Adding: ${add.join(", ")}`] : [],
-        ...remove.length > 0 ? [`Removing: ${remove.join(", ")}`] : [],
-        ...alreadyThere.length > 0 ? [`(already present, harmless: ${alreadyThere.join(", ")})`] : [],
-        ...notThere.length > 0 ? [`(not currently on the contact: ${notThere.join(", ")})`] : []
-      ];
-      const preview = previewLines.join("\n");
-      const prepared = await preparePendingAction(gate, {
-        actionType: "update_tags",
-        payload: { contactId: contact.id, contactName: name, add, remove },
-        preview
-      });
-      return preview + "\n" + confirmFooter(prepared.code, prepared.expiresAt);
-    } catch (err) {
-      if (err instanceof GhlError)
-        return `Couldn't prepare that tag change. ${err.friendly()}`;
-      throw err;
-    }
-  }
-};
-
-// dist/tools/ghl/runSalesAssessment.js
-function gradeFromThresholds(value, thresholds, higherIsBetter) {
-  for (const [limit, grade] of thresholds) {
-    if (higherIsBetter ? value >= limit : value <= limit)
-      return grade;
-  }
-  return "F";
-}
-function buildGrades(report, bookedPct) {
-  const grades = [];
-  const contactRate = report.analyzed > 0 ? report.contactedCount / report.analyzed * 100 : 0;
-  grades.push({
-    category: "Contact rate",
-    grade: gradeFromThresholds(contactRate, [[90, "A"], [80, "B"], [65, "C"], [50, "D"]], true),
-    detail: `${contactRate.toFixed(0)}% of new leads got at least one response.`,
-    advice: contactRate < 90 ? "Every lead should get a response \u2014 the untouched ones in get_new_leads are the quickest wins." : void 0
-  });
-  if (report.medianResponseMinutes !== void 0) {
-    grades.push({
-      category: "Speed to lead",
-      grade: gradeFromThresholds(report.medianResponseMinutes, [[5, "A"], [15, "B"], [60, "C"], [240, "D"]], false),
-      detail: `Typical first response came after ${fmtMinutes(report.medianResponseMinutes)}.`,
-      advice: report.medianResponseMinutes > 5 ? "Leads contacted within 5 minutes convert dramatically better. An instant text-back automation is the usual fix." : void 0
-    });
-  } else {
-    grades.push({
-      category: "Speed to lead",
-      grade: "F",
-      detail: "No responses found, so speed couldn't be measured."
     });
   }
-  const channelCount = Object.keys(report.channelCounts).length;
-  grades.push({
-    category: "Channel mix",
-    grade: channelCount >= 3 ? "A" : channelCount === 2 ? "B" : channelCount === 1 ? "C" : "F",
-    detail: channelCount > 0 ? `First touches went out over ${channelCount} channel(s): ${Object.keys(report.channelCounts).join(", ")}.` : "No outbound channels detected.",
-    advice: channelCount <= 1 ? "Mixing SMS, email, and calls reaches leads that ignore one channel." : void 0
-  });
-  if (bookedPct !== void 0) {
-    grades.push({
-      category: "Lead-to-booking conversion",
-      grade: gradeFromThresholds(bookedPct, [[30, "A"], [20, "B"], [10, "C"], [5, "D"]], true),
-      detail: `${bookedPct.toFixed(0)}% of this period's leads have an appointment or a won booking.`
-    });
-  }
-  return grades;
+  return server;
 }
-async function runSalesAssessment(cfg, range) {
-  const problem = tenantProblem(cfg);
-  if (problem)
-    return problem;
-  let report;
-  try {
-    report = await buildLeadReport(cfg, range.start, range.end, range.deep ? DETAIL_LIMIT_MAX : 75);
-  } catch (err) {
-    if (err instanceof GhlError)
-      return `Couldn't run the assessment. ${err.friendly()}`;
-    throw err;
-  }
-  let bookedPct;
-  try {
-    const leadIds = new Set(report.leads.map((l) => l.contactId));
-    const [events, opportunities] = await Promise.all([
-      getCalendarEvents(cfg, range.start, /* @__PURE__ */ new Date()),
-      getOpportunities(cfg)
-    ]);
-    const bookedContactIds = /* @__PURE__ */ new Set();
-    for (const e of events) {
-      if (e.contactId && e.appointmentStatus !== "cancelled" && leadIds.has(e.contactId)) {
-        bookedContactIds.add(e.contactId);
-      }
-    }
-    for (const o of opportunities) {
-      if (o.contactId && o.status === "won" && leadIds.has(o.contactId)) {
-        bookedContactIds.add(o.contactId);
-      }
-    }
-    if (leadIds.size > 0)
-      bookedPct = bookedContactIds.size / leadIds.size * 100;
-  } catch {
-  }
-  const grades = buildGrades(report, bookedPct);
-  const gradePoints = { A: 4, B: 3, C: 2, D: 1, F: 0 };
-  const avg = grades.reduce((s, g) => s + gradePoints[g.grade], 0) / grades.length;
-  const overall = avg >= 3.5 ? "A" : avg >= 2.5 ? "B" : avg >= 1.5 ? "C" : avg >= 0.75 ? "D" : "F";
-  const lines = [];
-  lines.push(`## ${range.deep ? "Sales assessment" : "30-day sales assessment"} (${fmtDate(range.start)} \u2013 ${fmtDate(range.end)})`);
-  lines.push("");
-  lines.push(`# Overall grade: ${overall}`);
-  lines.push("");
-  lines.push(`Based on ${report.totalLeads} new leads (${report.analyzed} analyzed in detail).`);
-  lines.push("");
-  lines.push("| Category | Grade | What we found |");
-  lines.push("|---|---|---|");
-  for (const g of grades) {
-    lines.push(`| ${g.category} | **${g.grade}** | ${g.detail} |`);
-  }
-  const advice = grades.filter((g) => g.advice);
-  if (advice.length > 0) {
-    lines.push("");
-    lines.push("### Where to focus first");
-    for (const g of advice) {
-      lines.push(`- **${g.category}:** ${g.advice}`);
-    }
-  }
-  lines.push("");
-  lines.push("*Note: this proof of concept uses a provisional scoring rubric. It will be replaced with Limo Marketer's official sales assessment logic.*");
-  return lines.join("\n");
-}
-var runSalesAssessmentTool = {
-  name: "run_sales_assessment",
-  title: "Run sales assessment",
-  description: "Runs the 30-day sales scorecard: grades contact rate, speed to lead, channel mix, and lead-to-booking conversion from GoHighLevel data, with an overall grade and where to focus first. Give start_date + end_date to assess a custom window instead.",
-  kind: "read",
-  inputSchema: { ...dateRangeArgs },
-  logArgs: logRangeArgs,
-  handler: ({ cfg }, args) => {
-    const range = resolveRangeArgs("last_30_days", args);
-    if ("error" in range)
-      return Promise.resolve(range.error);
-    return runSalesAssessment(cfg, range);
-  }
-};
 
 // dist/la/client.js
 var LA_READ_ALLOWLIST = {
@@ -25059,12 +22369,12 @@ function laDate(d) {
 
 // dist/la/scheduler.js
 var CHUNK_DAYS = 7;
-var DAY_MS3 = 24 * 60 * 60 * 1e3;
+var DAY_MS = 24 * 60 * 60 * 1e3;
 async function fetchScheduleTrips(creds, start, end) {
   const seen = /* @__PURE__ */ new Map();
-  for (let at = start.getTime(); at <= end.getTime(); at += CHUNK_DAYS * DAY_MS3) {
+  for (let at = start.getTime(); at <= end.getTime(); at += CHUNK_DAYS * DAY_MS) {
     const chunkStart = new Date(at);
-    const chunkEnd = new Date(Math.min(at + (CHUNK_DAYS - 1) * DAY_MS3, end.getTime()));
+    const chunkEnd = new Date(Math.min(at + (CHUNK_DAYS - 1) * DAY_MS, end.getTime()));
     const body = await laFetch(creds, "/admin/_forms/schedulerDataBackEnd.asp", {
       method: "POST",
       withVerificationToken: true,
@@ -25142,20 +22452,61 @@ function unseal(sealed, keyB64) {
   ]).toString("utf8");
 }
 
+// dist/db/supabase.js
+var SupabaseDbError = class extends Error {
+  status;
+  body;
+  constructor(status, body, context) {
+    super(`Supabase request failed (HTTP ${status}) during ${context}`);
+    this.status = status;
+    this.body = body;
+  }
+};
+function eq(field, value) {
+  return `${field}=eq.${encodeURIComponent(value)}`;
+}
+function headers(db, extra = {}) {
+  return {
+    apikey: db.serviceKey,
+    Authorization: `Bearer ${db.serviceKey}`,
+    "Content-Type": "application/json",
+    ...extra
+  };
+}
+async function parseRows(res, context) {
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new SupabaseDbError(res.status, body, context);
+  }
+  return await res.json();
+}
+async function sbSelect(db, table, query) {
+  const res = await fetch(`${db.url}/rest/v1/${table}?${query}`, { headers: headers(db) });
+  return parseRows(res, `select from ${table}`);
+}
+async function sbPatch(db, table, query, patch) {
+  const res = await fetch(`${db.url}/rest/v1/${table}?${query}`, {
+    method: "PATCH",
+    headers: headers(db, { Prefer: "return=representation" }),
+    body: JSON.stringify(patch)
+  });
+  return parseRows(res, `update ${table}`);
+}
+
 // dist/db/laCredentials.js
 var TABLE = "otto_la_credentials";
 var SELECT = "select=ghl_location_id,la_company_id,la_username,la_password_enc,status,verified_at";
 var CACHE_TTL_MS = 6e4;
-var cache2 = /* @__PURE__ */ new Map();
+var cache = /* @__PURE__ */ new Map();
 function invalidate(locationId) {
-  cache2.delete(locationId);
+  cache.delete(locationId);
 }
 async function fetchRow(db, locationId) {
   const rows = await sbSelect(db, TABLE, `${eq("ghl_location_id", locationId)}&${SELECT}&limit=1`);
   return rows[0] ?? null;
 }
 async function loadLaCreds(vault, locationId) {
-  const cached2 = cache2.get(locationId);
+  const cached2 = cache.get(locationId);
   if (cached2 && Date.now() - cached2.at < CACHE_TTL_MS)
     return cached2.value;
   const row = await fetchRow({ url: vault.db.url, serviceKey: vault.db.serviceKey }, locationId);
@@ -25167,7 +22518,7 @@ async function loadLaCreds(vault, locationId) {
       password: unseal(row.la_password_enc, vault.encKeyB64)
     }
   } : null;
-  cache2.set(locationId, { at: Date.now(), value });
+  cache.set(locationId, { at: Date.now(), value });
   return value;
 }
 async function markLaCredsStatus(db, locationId, status) {
@@ -25219,7 +22570,7 @@ function cell(text) {
   const t = (text ?? "").replace(/\|/g, "/").trim();
   return t === "" ? "\u2014" : t;
 }
-function money2(n) {
+function money(n) {
   return n === void 0 ? "\u2014" : `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 function phoneKey(text) {
@@ -29637,7 +26988,7 @@ var laGetQuoteTool = {
         return `No quote request with Ref # ${refNumber} was found among the most recent quotes in LimoAnywhere. Check the number with la_list_quotes \u2014 very old quotes fall outside the scan, and deleted ones don't appear at all.`;
       }
       if (!row.idQuote) {
-        return `Quote #${refNumber} exists but its detail link couldn't be read from the page \u2014 LimoAnywhere may have changed its layout. The list view shows: pickup ${row.puDate} ${row.puTime}, ${row.passenger}, ${row.vehicleType}, quoted ${money2(row.amount)}.`;
+        return `Quote #${refNumber} exists but its detail link couldn't be read from the page \u2014 LimoAnywhere may have changed its layout. The list view shows: pickup ${row.puDate} ${row.puTime}, ${row.passenger}, ${row.vehicleType}, quoted ${money(row.amount)}.`;
       }
       const q = await fetchQuoteDetail(creds, row.idQuote);
       const lines = [];
@@ -29651,7 +27002,7 @@ var laGetQuoteTool = {
         lines.push(`- **Occasion:** ${q.occasion}`);
       if (q.promoCode)
         lines.push(`- **Promo code:** ${q.promoCode}`);
-      lines.push(`- **Quoted total:** ${money2(q.grandTotal ?? row.amount)}`);
+      lines.push(`- **Quoted total:** ${money(q.grandTotal ?? row.amount)}`);
       lines.push("");
       lines.push(`**Contact:** ${cell(q.contactName)} \xB7 ${cell(q.contactPhone)}${q.contactEmail ? ` \xB7 ${q.contactEmail}` : ""}`);
       if (q.routing) {
@@ -29880,8 +27231,8 @@ var laGetReservationTool = {
         lines.push(`- Reserved ${cell(r.reservedAt)} by ${cell(r.reservedBy)}`);
       lines.push("");
       lines.push("**Money**");
-      lines.push(`- Grand total: ${money2(r.grandTotal)}${r.currency && r.currency !== "USD ($)" ? ` (${r.currency})` : ""}`);
-      lines.push(`- Payments/deposits: ${money2(r.paymentsDeposits)} \xB7 **Balance due: ${money2(r.totalDue)}**`);
+      lines.push(`- Grand total: ${money(r.grandTotal)}${r.currency && r.currency !== "USD ($)" ? ` (${r.currency})` : ""}`);
+      lines.push(`- Payments/deposits: ${money(r.paymentsDeposits)} \xB7 **Balance due: ${money(r.totalDue)}**`);
       lines.push(`- Payment type: ${cell(r.paymentType)}`);
       if (r.tripNotes) {
         lines.push("");
@@ -29895,6 +27246,110 @@ var laGetReservationTool = {
     });
   }
 };
+
+// dist/lib/period.js
+var PERIOD_VALUES = [
+  "today",
+  "yesterday",
+  "last_7_days",
+  "last_14_days",
+  "last_30_days",
+  "this_month",
+  "last_month"
+];
+function startOfDay(d) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+function resolvePeriod(period, now = /* @__PURE__ */ new Date()) {
+  const todayStart = startOfDay(now);
+  const day = 24 * 60 * 60 * 1e3;
+  switch (period) {
+    case "today":
+      return { start: todayStart, end: now, label: "today" };
+    case "yesterday": {
+      const start = new Date(todayStart.getTime() - day);
+      return { start, end: new Date(todayStart.getTime() - 1), label: "yesterday" };
+    }
+    case "last_7_days":
+      return { start: new Date(todayStart.getTime() - 6 * day), end: now, label: "the last 7 days" };
+    case "last_14_days":
+      return { start: new Date(todayStart.getTime() - 13 * day), end: now, label: "the last 14 days" };
+    case "last_30_days":
+      return { start: new Date(todayStart.getTime() - 29 * day), end: now, label: "the last 30 days" };
+    case "this_month": {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { start, end: now, label: "this month so far" };
+    }
+    case "last_month": {
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const end = new Date(new Date(now.getFullYear(), now.getMonth(), 1).getTime() - 1);
+      return { start, end, label: "last month" };
+    }
+  }
+}
+var ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+var DAY_MS2 = 24 * 60 * 60 * 1e3;
+var MAX_RANGE_DAYS = 92;
+function resolveRangeArgs(period, args, opts = {}, now = /* @__PURE__ */ new Date()) {
+  const { start_date: startArg, end_date: endArg } = args ?? {};
+  if (!startArg && !endArg)
+    return { ...resolvePeriod(period, now), deep: false };
+  if (!startArg || !endArg) {
+    return {
+      error: "Please give both a start date and an end date (YYYY-MM-DD) \u2014 for example start_date 2026-08-01 and end_date 2026-08-14."
+    };
+  }
+  if (!ISO_DATE.test(startArg) || !ISO_DATE.test(endArg)) {
+    return { error: "Dates need to be in YYYY-MM-DD format, e.g. 2026-08-01." };
+  }
+  const start = /* @__PURE__ */ new Date(`${startArg}T00:00:00`);
+  const end = /* @__PURE__ */ new Date(`${endArg}T23:59:59.999`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return { error: "One of those dates doesn't exist \u2014 double-check the day and month." };
+  }
+  if (start > end) {
+    return { error: "The start date is after the end date \u2014 swap them and try again." };
+  }
+  const spanDays = Math.ceil((end.getTime() - start.getTime()) / DAY_MS2);
+  if (spanDays > MAX_RANGE_DAYS) {
+    return {
+      error: `That's about a ${spanDays}-day range \u2014 for deep analysis please keep it under ~3 months, or split it into shorter ranges.`
+    };
+  }
+  if (!opts.allowFuture && start > now) {
+    return { error: "That range is in the future \u2014 this report only covers what has already happened." };
+  }
+  const label = `${fmtDate(start)} to ${fmtDate(end)}`;
+  return { start, end: end > now && !opts.allowFuture ? now : end, label, deep: true };
+}
+function fmtDate(d) {
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+function fmtDateTime(d) {
+  return d.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+}
+
+// dist/tools/args.js
+var periodArg = external_exports.enum(PERIOD_VALUES).describe("Preset time period, e.g. last_7_days").optional();
+var dateRangeArgs = {
+  start_date: external_exports.string().optional().describe("Start date (YYYY-MM-DD). Give BOTH dates to deep-analyze everything in the range (up to 300 leads) instead of the quick 50-lead sample."),
+  end_date: external_exports.string().optional().describe("End date (YYYY-MM-DD, inclusive).")
+};
+function logRangeArgs(args) {
+  const picked = {};
+  for (const key of ["period", "start_date", "end_date"]) {
+    if (args[key] !== void 0)
+      picked[key] = args[key];
+  }
+  return picked;
+}
 
 // dist/tools/limoanywhere/laGetSchedule.js
 function fmtTime(d) {
@@ -30003,12 +27458,12 @@ var laListQuotesTool = {
       }
       const totalQuoted = quotes.reduce((sum, q) => sum + (q.amount ?? 0), 0);
       const newCount = quotes.filter((q) => q.isNew).length;
-      lines.push(`**${quotes.length} quote request(s)**, ${newCount} still un-actioned. Total quoted value: ${money2(totalQuoted)}.`);
+      lines.push(`**${quotes.length} quote request(s)**, ${newCount} still un-actioned. Total quoted value: ${money(totalQuoted)}.`);
       lines.push("");
       lines.push("| Ref # | Requested | Pickup | Passenger | Vehicle | Quoted | Phone | New? |");
       lines.push("|---|---|---|---|---|---|---|---|");
       for (const q of quotes) {
-        lines.push(`| ${q.refNumber} | ${q.requestedAt ? fmtDateTime(q.requestedAt) : cell(q.requestedText)} | ${cell(q.puDate)} ${cell(q.puTime)} | ${cell(q.passenger)} | ${cell(q.vehicleType)} | ${money2(q.amount)} | ${cell(q.phone)} | ${q.isNew ? "**NEW**" : ""} |`);
+        lines.push(`| ${q.refNumber} | ${q.requestedAt ? fmtDateTime(q.requestedAt) : cell(q.requestedText)} | ${cell(q.puDate)} ${cell(q.puTime)} | ${cell(q.passenger)} | ${cell(q.vehicleType)} | ${money(q.amount)} | ${cell(q.phone)} | ${q.isNew ? "**NEW**" : ""} |`);
       }
       if (truncated) {
         lines.push("");
@@ -30078,12 +27533,12 @@ var laListReservationsTool = {
         return lines.join("\n");
       }
       const total = list.reduce((sum, r) => sum + (r.total ?? 0), 0);
-      lines.push(`**${list.length} reservation(s)**, combined total ${money2(total)}.`);
+      lines.push(`**${list.length} reservation(s)**, combined total ${money(total)}.`);
       lines.push("");
       lines.push(`| Conf # | Pickup | Passenger | Company | Vehicle | Total | Payment | ${isOnlineTab ? "Submitted" : "Status"} | Group |`);
       lines.push("|---|---|---|---|---|---|---|---|---|");
       for (const r of list) {
-        lines.push(`| ${r.confNumber} | ${cell(r.puDate)} ${cell(r.puTime)} | ${cell(r.passenger)} | ${cell(r.company)} | ${cell(r.vehicleType)} | ${money2(r.total)} | ${cell(r.paymentType)} | ${cell(r.statusOrSubmitted)} | ${cell(r.groupName)} |`);
+        lines.push(`| ${r.confNumber} | ${cell(r.puDate)} ${cell(r.puTime)} | ${cell(r.passenger)} | ${cell(r.company)} | ${cell(r.vehicleType)} | ${money(r.total)} | ${cell(r.paymentType)} | ${cell(r.statusOrSubmitted)} | ${cell(r.groupName)} |`);
       }
       if (truncated) {
         lines.push("");
@@ -30156,14 +27611,14 @@ var laQuoteConversionReportTool = {
       const quotedTotal = quotes.reduce((s, q) => s + (q.amount ?? 0), 0);
       const wonTotal = converted.reduce((s, c) => s + (c.res.total ?? c.quote.amount ?? 0), 0);
       const rate = converted.length / quotes.length * 100;
-      lines.push(`**${quotes.length} quote request(s)** worth ${money2(quotedTotal)} \u2192 **${converted.length} appear converted** (${rate.toFixed(0)}%), worth ${money2(wonTotal)}.`);
+      lines.push(`**${quotes.length} quote request(s)** worth ${money(quotedTotal)} \u2192 **${converted.length} appear converted** (${rate.toFixed(0)}%), worth ${money(wonTotal)}.`);
       lines.push("");
       if (converted.length > 0) {
         lines.push("### Converted");
         lines.push("| Quote # | Passenger | Pickup | Quoted | Became Conf # | Booked total |");
         lines.push("|---|---|---|---|---|---|");
         for (const c of converted) {
-          lines.push(`| ${c.quote.refNumber} | ${cell(c.quote.passenger)} | ${cell(c.quote.puDate)} | ${money2(c.quote.amount)} | ${c.res.confNumber} | ${money2(c.res.total)} |`);
+          lines.push(`| ${c.quote.refNumber} | ${cell(c.quote.passenger)} | ${cell(c.quote.puDate)} | ${money(c.quote.amount)} | ${c.res.confNumber} | ${money(c.res.total)} |`);
         }
         lines.push("");
       }
@@ -30172,7 +27627,7 @@ var laQuoteConversionReportTool = {
         lines.push("| Quote # | Requested | Passenger | Pickup | Vehicle | Quoted | Phone |");
         lines.push("|---|---|---|---|---|---|---|");
         for (const q of notConverted) {
-          lines.push(`| ${q.refNumber} | ${cell(q.requestedText)} | ${cell(q.passenger)} | ${cell(q.puDate)} | ${cell(q.vehicleType)} | ${money2(q.amount)} | ${cell(q.phone)} |`);
+          lines.push(`| ${q.refNumber} | ${cell(q.requestedText)} | ${cell(q.passenger)} | ${cell(q.puDate)} | ${cell(q.vehicleType)} | ${money(q.amount)} | ${cell(q.phone)} |`);
         }
       }
       if (quotesTruncated || resTruncated) {
@@ -30218,9 +27673,9 @@ var laRevenueSummaryTool = {
       const liveTotal = live.reduce((s, t) => s + (t.total ?? 0), 0);
       const deadTotal = dead.reduce((s, t) => s + (t.total ?? 0), 0);
       const avg = live.length > 0 ? liveTotal / live.length : 0;
-      lines.push(`**${live.length} trip(s), ${money2(liveTotal)} booked.** Average ticket ${money2(avg)}.`);
+      lines.push(`**${live.length} trip(s), ${money(liveTotal)} booked.** Average ticket ${money(avg)}.`);
       if (dead.length > 0) {
-        lines.push(`*(plus ${dead.length} cancelled/no-show trip(s) worth ${money2(deadTotal)}, excluded from the totals above)*`);
+        lines.push(`*(plus ${dead.length} cancelled/no-show trip(s) worth ${money(deadTotal)}, excluded from the totals above)*`);
       }
       lines.push("");
       const byStatus = /* @__PURE__ */ new Map();
@@ -30233,7 +27688,7 @@ var laRevenueSummaryTool = {
       lines.push("| Status | Trips | Total |");
       lines.push("|---|---|---|");
       for (const [status, agg] of [...byStatus.entries()].sort((a, b) => b[1].total - a[1].total)) {
-        lines.push(`| ${status} | ${agg.count} | ${money2(agg.total)} |`);
+        lines.push(`| ${status} | ${agg.count} | ${money(agg.total)} |`);
       }
       lines.push("");
       const byVehicle = /* @__PURE__ */ new Map();
@@ -30246,7 +27701,7 @@ var laRevenueSummaryTool = {
       lines.push("| Vehicle type | Trips | Total |");
       lines.push("|---|---|---|");
       for (const [veh, agg] of [...byVehicle.entries()].sort((a, b) => b[1].total - a[1].total)) {
-        lines.push(`| ${veh} | ${agg.count} | ${money2(agg.total)} |`);
+        lines.push(`| ${veh} | ${agg.count} | ${money(agg.total)} |`);
       }
       if (truncated) {
         lines.push("");
@@ -30283,21 +27738,6 @@ var laUpdateTool = {
 };
 
 // dist/tools/index.js
-var GHL_READ_TOOLS = [
-  checkConnectionTool,
-  getNewLeadsTool,
-  getWeeklyNumbersTool,
-  runSalesAssessmentTool,
-  findContactTool,
-  getConversationTool,
-  getAwaitingReplyTool,
-  getFollowupCandidatesTool,
-  listOpportunitiesTool,
-  getPipelineOverviewTool,
-  listAppointmentsTool,
-  listTeamTool,
-  listWorkflowsTool
-];
 var LA_TOOLS = [
   laCheckConnectionTool,
   laGetScheduleTool,
@@ -30309,79 +27749,6 @@ var LA_TOOLS = [
   laRevenueSummaryTool
 ];
 var LA_SETUP_TOOLS = [laConnectStartTool, laConnectTool, laUpdateTool];
-var GHL_WRITE_TOOLS = [
-  prepareSendMessageTool,
-  prepareUpdateTagsTool,
-  prepareAddNoteTool,
-  prepareCreateOpportunityTool,
-  prepareMoveOpportunityTool,
-  confirmActionTool,
-  cancelActionTool
-];
-var GHL_TOOLS = [...GHL_READ_TOOLS, ...GHL_WRITE_TOOLS];
-
-// dist/server/mcp.js
-var DEFAULT_INSTRUCTIONS = [
-  "Otto AI gives you a limo operator's CRM (GoHighLevel). These tools are",
-  "building blocks, not fixed reports \u2014 compose them. Enumerate with the",
-  "list/get tools, then read individual threads with get_conversation to",
-  "answer questions no single tool covers. When a scan stops early it tells",
-  "you exactly how to continue (an offset or a narrower date range) \u2014 keep",
-  "going when the operator's question demands completeness, and say plainly",
-  "what you skipped when it doesn't. Prefer narrowing over giving up.",
-  "Before proposing manual outreach, check list_workflows for automations",
-  "already messaging those contacts, and never draft messages to contacts",
-  "who replied 'stop' or have do-not-disturb set. Writes are two-step:",
-  "prepare_* returns a preview + one-time code that you MUST show the",
-  "operator and get explicit approval for; only then call confirm_action \u2014",
-  "never in the same turn."
-].join(" ");
-function buildMcpServer(cfg, onToolCall, gate, opts = {}) {
-  const server = new McpServer({
-    name: opts.name ?? "otto-ai-mcp",
-    title: opts.title ?? "Otto AI",
-    version: "0.1.0"
-  }, {
-    instructions: opts.instructions ?? DEFAULT_INSTRUCTIONS
-  });
-  const deps = { cfg, gate };
-  let noticePending = opts.notice !== void 0;
-  for (const tool of opts.tools ?? GHL_TOOLS) {
-    server.registerTool(tool.name, { title: tool.title, description: tool.description, inputSchema: tool.inputSchema }, async (rawArgs) => {
-      const args = rawArgs ?? {};
-      const logged = tool.logArgs?.(args);
-      const startedAt = Date.now();
-      try {
-        let text = await tool.handler(deps, args);
-        if (noticePending) {
-          noticePending = false;
-          try {
-            const extra = await opts.notice?.();
-            if (extra)
-              text = `${text}
-
-${extra}`;
-          } catch {
-          }
-        }
-        onToolCall?.({ tool: tool.name, ok: true, durationMs: Date.now() - startedAt, args: logged });
-        return { content: [{ type: "text", text }] };
-      } catch (err) {
-        onToolCall?.({ tool: tool.name, ok: false, durationMs: Date.now() - startedAt, args: logged });
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Something went wrong inside Otto AI: ${err.message}. Try the check_connection tool to diagnose.`
-            }
-          ],
-          isError: true
-        };
-      }
-    });
-  }
-  return server;
-}
 
 // dist/laServer.js
 var SETUP_HINT = `LimoAnywhere isn't connected yet. Run the /otto-setup command \u2014 or call la_connect_start \u2014 to get a one-time link to a setup page on this machine, where the operator types their manage.mylimobiz.com login (company ID, username, password) into a normal browser form; the password never appears in this conversation. Recommend a dedicated view-only LimoAnywhere user rather than an admin login. The login is verified, then saved only on this machine. (For support: no saved login was found; this install keeps it at ${credentialsFilePath()}.)`;
@@ -30420,7 +27787,7 @@ if (process.argv.includes(SETUP_LAUNCHER_FLAG)) {
     setupHint: SETUP_HINT
   };
   void updateNotice();
-  const server = buildMcpServer(cfg, void 0, void 0, {
+  const server = buildMcpServer(cfg, void 0, {
     tools: [...LA_TOOLS, ...LA_SETUP_TOOLS],
     name: "otto-limoanywhere",
     title: "Otto AI by Limo Marketer",

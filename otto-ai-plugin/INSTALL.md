@@ -73,7 +73,7 @@ npm run test:la-creds  # LimoAnywhere credential linking
 automatically:
 
 1. Claude Desktop → **Customize → Plugins → Add marketplace** →
-   `Booked-Rides/otto-ai-marketplace`.
+   `Limo-Marketer/otto-ai-by-limo-marketer`.
 2. Install **Otto AI**.
 
 **For local testing of an unreleased build**, upload a zip instead. The
@@ -158,7 +158,7 @@ itself:
    automatic_updates=on` records it, and from then on the server updates
    itself at session start and says so. The Aug 17 decision doc's rejection
    of *silent* self-updaters holds: explicit opt-in, pinned source
-   (`Booked-Rides/otto-ai-marketplace`), and every applied update is
+   (`Limo-Marketer/otto-ai-by-limo-marketer`), and every applied update is
    announced in-chat.
 
 Manual paths still work: the operator can enable Claude's own marketplace

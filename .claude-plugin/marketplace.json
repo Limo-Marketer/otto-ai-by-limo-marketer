@@ -10,7 +10,7 @@
       "source": "./otto-ai-plugin",
       "displayName": "Otto AI by Limo Marketer",
       "description": "Ask questions about your LimoAnywhere back office — today's schedule, quote requests, reservations, and booked revenue. Local and read-only.",
-      "version": "0.9.0",
+      "version": "0.9.1",
       "category": "productivity",
       "keywords": [
         "limo",

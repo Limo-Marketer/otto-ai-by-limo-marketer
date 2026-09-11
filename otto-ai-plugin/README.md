@@ -46,7 +46,7 @@ assembled at build time.
 
 **From this repository as a marketplace**: `.claude-plugin/marketplace.json` at
 the repo root declares it. In Cowork, **Add marketplace** and enter
-`Booked-Rides/miles-ai`. Note this requires `server/` to be present in the
+`Limo-Marketer/otto-ai-plugin-src`. Note this requires `server/` to be present in the
 repository, which it currently isn't — see below.
 
 ## Open items

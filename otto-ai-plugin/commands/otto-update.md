@@ -21,7 +21,7 @@ Do this:
    - **Already up to date** → say so, done.
    - **Marketplace not set up / installed by zip / pre-rename install** → the
      tool's message contains the exact fix (usually: Customize → Plugins →
-     Add marketplace → `Booked-Rides/otto-ai-marketplace`, install **Otto AI
+     Add marketplace → `Limo-Marketer/otto-ai-by-limo-marketer`, install **Otto AI
      by Limo Marketer**). Walk them through it; their saved LimoAnywhere
      login survives a reinstall.
    - **Offline** → try again when the machine has internet.
