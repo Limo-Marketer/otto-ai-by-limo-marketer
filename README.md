@@ -20,7 +20,7 @@ In **Claude Desktop** (any paid plan):
 3. Choose **Add marketplace** and enter:
 
    ```
-   Booked-Rides/otto-ai-marketplace
+   Limo-Marketer/otto-ai-by-limo-marketer
    ```
 
 4. Install **Otto AI by Limo Marketer**.
