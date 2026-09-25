@@ -1,7 +1,7 @@
 {
   "name": "otto-ai-plugin",
   "displayName": "Otto AI by Limo Marketer",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "Limo Marketer's AI assistant for limo operators: your LimoAnywhere back office \u2014 schedule, quotes, reservations, booked revenue \u2014 read locally; and, with your confirmation, book a trip, assign a driver, change a status, or add a note.",
   "author": {
     "name": "Limo Marketer",

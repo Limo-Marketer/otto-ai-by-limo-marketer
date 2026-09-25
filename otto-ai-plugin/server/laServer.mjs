@@ -26860,8 +26860,14 @@ function selectValues(sel) {
   const chosen = selected.length > 0 ? selected[selected.length - 1] : options[0];
   return chosen ? [optionValue(chosen)] : [];
 }
+function formFragment(html, formName) {
+  const bare = html.replace(/<script\b[\s\S]*?<\/script\s*>/gi, "").replace(/<!--[\s\S]*?-->/g, "");
+  const name = formName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`<form\\b[^>]*\\bname=["']?${name}["'\\s>][\\s\\S]*?<\\/form\\s*>`, "i");
+  return re.exec(bare)?.[0];
+}
 function findForm(html, formName) {
-  const root = parseLaHtml(html);
+  const root = parseLaHtml(formFragment(html, formName) ?? html);
   const form = root.querySelector(`form[name="${formName}"]`);
   if (!form)
     throw new Error(`LimoAnywhere's page has no "${formName}" form \u2014 the screen may have changed.`);
