@@ -13,7 +13,7 @@ the way they do.
 | `skills/limoanywhere` | Back-office playbooks — schedule, quotes, reservations, revenue | talks to the **local** server |
 | `commands/otto-setup` | Captures the operator's LimoAnywhere login | local |
 | `commands/otto-doctor` | End-to-end diagnostic across both connections | both |
-| `otto-limoanywhere` (`.mcp.json`) | Bundled stdio server, read-only | operator's machine |
+| `otto-limoanywhere` (`.mcp.json`) | Bundled stdio server: reads, plus prepare/confirm-gated writes | operator's machine |
 | `otto-ai-mcp` (hosted, separate) | Remote connector, OAuth via Booked Rides | Railway |
 
 LimoAnywhere runs locally so the operator's login stays on their machine and LA
@@ -35,7 +35,7 @@ npm run plugin:build
 
 Compiles the TypeScript, copies `dist/` plus the four runtime dependencies into
 `server/`, and verifies the packaged server starts standalone and advertises
-its eight LimoAnywhere tools. `server/` is generated and gitignored — an
+its fifteen LimoAnywhere tools. `server/` is generated and gitignored — an
 installed plugin can't run `npm install` for itself, so the payload is
 assembled at build time.
 
@@ -46,7 +46,7 @@ assembled at build time.
 
 **From this repository as a marketplace**: `.claude-plugin/marketplace.json` at
 the repo root declares it. In Cowork, **Add marketplace** and enter
-`Limo-Marketer/otto-ai-plugin-src`. Note this requires `server/` to be present in the
+`Limo-Marketer/otto-ai-plugin`. Note this requires `server/` to be present in the
 repository, which it currently isn't — see below.
 
 ## Open items

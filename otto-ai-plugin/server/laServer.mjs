@@ -111,7 +111,7 @@ var require_package = __commonJS({
 var require_main = __commonJS({
   "node_modules/dotenv/lib/main.js"(exports, module) {
     var fs = __require("fs");
-    var path5 = __require("path");
+    var path6 = __require("path");
     var os = __require("os");
     var crypto = __require("crypto");
     var packageJson = require_package();
@@ -227,7 +227,7 @@ var require_main = __commonJS({
           possibleVaultPath = options.path.endsWith(".vault") ? options.path : `${options.path}.vault`;
         }
       } else {
-        possibleVaultPath = path5.resolve(process.cwd(), ".env.vault");
+        possibleVaultPath = path6.resolve(process.cwd(), ".env.vault");
       }
       if (fs.existsSync(possibleVaultPath)) {
         return possibleVaultPath;
@@ -235,7 +235,7 @@ var require_main = __commonJS({
       return null;
     }
     function _resolveHome(envPath2) {
-      return envPath2[0] === "~" ? path5.join(os.homedir(), envPath2.slice(1)) : envPath2;
+      return envPath2[0] === "~" ? path6.join(os.homedir(), envPath2.slice(1)) : envPath2;
     }
     function _configVault(options) {
       const debug = Boolean(options && options.debug);
@@ -252,7 +252,7 @@ var require_main = __commonJS({
       return { parsed };
     }
     function configDotenv(options) {
-      const dotenvPath = path5.resolve(process.cwd(), ".env");
+      const dotenvPath = path6.resolve(process.cwd(), ".env");
       let encoding = "utf8";
       const debug = Boolean(options && options.debug);
       const quiet = options && "quiet" in options ? options.quiet : true;
@@ -276,13 +276,13 @@ var require_main = __commonJS({
       }
       let lastError;
       const parsedAll = {};
-      for (const path6 of optionPaths) {
+      for (const path7 of optionPaths) {
         try {
-          const parsed = DotenvModule.parse(fs.readFileSync(path6, { encoding }));
+          const parsed = DotenvModule.parse(fs.readFileSync(path7, { encoding }));
           DotenvModule.populate(parsedAll, parsed, options);
         } catch (e) {
           if (debug) {
-            _debug(`Failed to load ${path6} ${e.message}`);
+            _debug(`Failed to load ${path7} ${e.message}`);
           }
           lastError = e;
         }
@@ -297,7 +297,7 @@ var require_main = __commonJS({
         const shortPaths = [];
         for (const filePath of optionPaths) {
           try {
-            const relative = path5.relative(process.cwd(), filePath);
+            const relative = path6.relative(process.cwd(), filePath);
             shortPaths.push(relative);
           } catch (e) {
             if (debug) {
@@ -3593,8 +3593,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path5) {
-      let input = path5;
+    function removeDotSegments(path6) {
+      let input = path6;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3846,8 +3846,8 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path5, query] = wsComponent.resourceName.split("?");
-        wsComponent.path = path5 && path5 !== "/" ? path5 : void 0;
+        const [path6, query] = wsComponent.resourceName.split("?");
+        wsComponent.path = path6 && path6 !== "/" ? path6 : void 0;
         wsComponent.query = query;
         wsComponent.resourceName = void 0;
       }
@@ -7477,10 +7477,10 @@ function assignProp(target, prop, value) {
     configurable: true
   });
 }
-function getElementAtPath(obj, path5) {
-  if (!path5)
+function getElementAtPath(obj, path6) {
+  if (!path6)
     return obj;
-  return path5.reduce((acc, key) => acc?.[key], obj);
+  return path6.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -7800,11 +7800,11 @@ function aborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path5, issues) {
+function prefixIssues(path6, issues) {
   return issues.map((iss) => {
     var _a;
     (_a = iss).path ?? (_a.path = []);
-    iss.path.unshift(path5);
+    iss.path.unshift(path6);
     return iss;
   });
 }
@@ -13527,8 +13527,8 @@ var LaError = class extends Error {
   status;
   body;
   customFriendly;
-  constructor(status, body, path5, friendly2) {
-    super(`LimoAnywhere error ${status} on ${path5}`);
+  constructor(status, body, path6, friendly2) {
+    super(`LimoAnywhere error ${status} on ${path6}`);
     this.status = status;
     this.body = body;
     this.customFriendly = friendly2;
@@ -14614,8 +14614,8 @@ function getErrorMap() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path5, errorMaps, issueData } = params;
-  const fullPath = [...path5, ...issueData.path || []];
+  const { data, path: path6, errorMaps, issueData } = params;
+  const fullPath = [...path6, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -14731,11 +14731,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path5, key) {
+  constructor(parent, value, path6, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path5;
+    this._path = path6;
     this._key = key;
   }
   get path() {
@@ -18307,11 +18307,11 @@ function normalizeObjectSchema(schema) {
   }
   return void 0;
 }
-function getDotPath(path5) {
-  if (path5.length === 0) {
+function getDotPath(path6) {
+  if (path6.length === 0) {
     return "object root";
   }
-  return path5.reduce((acc, seg, index) => {
+  return path6.reduce((acc, seg, index) => {
     if (index === 0) {
       return String(seg);
     }
@@ -22282,47 +22282,29 @@ ${extra}`;
   return server;
 }
 
-// dist/la/client.js
-var LA_READ_ALLOWLIST = {
-  "/admin/manageQuotes.asp": { queryAction: /* @__PURE__ */ new Set(["showQuotes", "viewQRequest"]) },
-  "/admin/manageRes.asp": {
-    queryAction: /* @__PURE__ */ new Set(["showResList1", "showEResList", "showUnfList", "showDeleted", "showResForm"])
-  },
-  "/admin/_forms/schedulerDataBackEnd.asp": { formMethod: /* @__PURE__ */ new Set(["schedulerDataLoad"]) },
-  "/adminnew/ajax/GetVerificationToken": {}
-};
-function assertReadOnly(path5, url, opts) {
-  const rule = LA_READ_ALLOWLIST[url.pathname];
-  const refuse = (why) => {
-    throw new LaError(403, why, path5, `Refused by Otto's read-only guard: ${why}. Otto never changes anything in LimoAnywhere \u2014 it only reads.`);
-  };
-  if (!rule)
-    refuse(`"${url.pathname}" isn't an allowlisted read screen`);
-  const action = url.searchParams.get("action");
-  if (rule.queryAction && (!action || !rule.queryAction.has(action))) {
-    refuse(`action "${action ?? "(none)"}" isn't an allowlisted read action for ${url.pathname}`);
-  }
-  if (opts.method === "POST") {
-    const formMethod = opts.form?.method;
-    if (!rule.formMethod || !formMethod || !rule.formMethod.has(formMethod)) {
-      refuse(`POST "${formMethod ?? "(no method)"}" isn't an allowlisted read call for ${url.pathname}`);
-    }
-  }
-}
-function looksLoggedOut(res, text) {
-  const redirected = res.status >= 300 && res.status < 400;
-  const target = res.headers.get("location") ?? "";
-  if (redirected && /login\.asp/i.test(target))
-    return true;
-  return res.status === 200 && /name="Login"[\s\S]{0,2000}loginNow\.asp/i.test(text.slice(0, 2e4));
-}
-async function laFetch(creds, path5, opts = {}) {
-  const url = new URL(path5, LA_BASE);
-  for (const [k, v] of Object.entries(opts.query ?? {})) {
+// dist/la/request.js
+function laUrl(path6, query) {
+  const url = new URL(path6, LA_BASE);
+  for (const [k, v] of Object.entries(query ?? {})) {
     if (v !== void 0)
       url.searchParams.set(k, String(v));
   }
-  assertReadOnly(path5, url, opts);
+  return url;
+}
+function encodeForm(form) {
+  const params = new URLSearchParams();
+  const entries = Array.isArray(form) ? form : Object.entries(form);
+  for (const [k, v] of entries)
+    params.append(k, v);
+  return params.toString();
+}
+function looksLoggedOut(res) {
+  const redirected = res.status >= 300 && res.status < 400;
+  if (redirected && /login\.asp/i.test(res.location ?? ""))
+    return true;
+  return res.status === 200 && /name="Login"[\s\S]{0,2000}loginNow\.asp/i.test(res.text.slice(0, 2e4));
+}
+async function laRequest(creds, url, opts) {
   const doFetch = async (freshLogin) => {
     const session = freshLogin ? await laLogin(creds) : await getSession(creds);
     const headers2 = {
@@ -22338,26 +22320,59 @@ async function laFetch(creds, path5, opts = {}) {
       method: opts.method ?? "GET",
       redirect: "manual",
       headers: headers2,
-      body: opts.form ? new URLSearchParams(opts.form).toString() : void 0
+      body: opts.form ? encodeForm(opts.form) : void 0
     });
-    const text2 = await res2.text().catch(() => "");
-    return { res: res2, text: text2 };
+    const text = await res2.text().catch(() => "");
+    return { status: res2.status, location: res2.headers.get("location") ?? void 0, text };
   };
-  let { res, text } = await doFetch(false);
-  if (looksLoggedOut(res, text)) {
+  let res = await doFetch(false);
+  if (looksLoggedOut(res)) {
     invalidateSession(creds);
-    ({ res, text } = await doFetch(true));
-    if (looksLoggedOut(res, text)) {
-      throw new LaError(401, "still logged out after re-login", path5, "LimoAnywhere keeps bouncing us to its login page even after logging in again. The credentials may lack permission for this screen, or LimoAnywhere is having trouble \u2014 try again shortly.");
+    res = await doFetch(true);
+    if (looksLoggedOut(res)) {
+      throw new LaError(401, "still logged out after re-login", url.pathname, "LimoAnywhere keeps bouncing us to its login page even after logging in again. The credentials may lack permission for this screen, or LimoAnywhere is having trouble \u2014 try again shortly.");
     }
   }
-  if (res.status === 429) {
-    throw new LaError(429, text, path5);
+  if (res.status === 429)
+    throw new LaError(429, res.text, url.pathname);
+  if (res.status >= 400)
+    throw new LaError(res.status, res.text, url.pathname);
+  return res;
+}
+
+// dist/la/client.js
+var LA_READ_ALLOWLIST = {
+  "/admin/manageQuotes.asp": { queryAction: /* @__PURE__ */ new Set(["showQuotes", "viewQRequest"]) },
+  "/admin/manageRes.asp": {
+    queryAction: /* @__PURE__ */ new Set(["showResList1", "showEResList", "showUnfList", "showDeleted", "showResForm"])
+  },
+  "/admin/_forms/schedulerDataBackEnd.asp": { formMethod: /* @__PURE__ */ new Set(["schedulerDataLoad"]) },
+  "/adminnew/ajax/GetVerificationToken": {}
+};
+function assertReadOnly(url, opts) {
+  const rule = LA_READ_ALLOWLIST[url.pathname];
+  const refuse = (why) => {
+    throw new LaError(403, why, url.pathname, `Refused by Otto's read-only guard: ${why}. Reads never change anything in LimoAnywhere; changes go through the prepare-then-confirm tools only.`);
+  };
+  if (!rule)
+    refuse(`"${url.pathname}" isn't an allowlisted read screen`);
+  const action = url.searchParams.get("action");
+  if (rule.queryAction && (!action || !rule.queryAction.has(action))) {
+    refuse(`action "${action ?? "(none)"}" isn't an allowlisted read action for ${url.pathname}`);
   }
-  if (res.status >= 400) {
-    throw new LaError(res.status, text, path5);
+  if (opts.method === "POST") {
+    const form = opts.form;
+    const formMethod = Array.isArray(form) ? form.find(([k]) => k === "method")?.[1] : form?.method;
+    if (!rule.formMethod || !formMethod || !rule.formMethod.has(formMethod)) {
+      refuse(`POST "${formMethod ?? "(no method)"}" isn't an allowlisted read call for ${url.pathname}`);
+    }
   }
-  return text;
+}
+async function laFetch(creds, path6, opts = {}) {
+  const url = laUrl(path6, opts.query);
+  assertReadOnly(url, opts);
+  const res = await laRequest(creds, url, opts);
+  return res.text;
 }
 var MAX_LIST_PAGES = 4;
 var LIST_PAGE_SIZE = 100;
@@ -22547,7 +22562,7 @@ async function resolveLaAccess(cfg) {
   }
   return { problem: laProblem(cfg) ?? "LimoAnywhere isn't connected yet." };
 }
-async function runLaTool(cfg, fn) {
+async function runLaTool(cfg, fn, verb = "read from") {
   const access = await resolveLaAccess(cfg);
   if ("problem" in access)
     return access.problem;
@@ -22561,7 +22576,7 @@ async function runLaTool(cfg, fn) {
         }
         return REAUTH_MESSAGE;
       }
-      return `Couldn't read from LimoAnywhere. ${err.friendly()}`;
+      return `Couldn't ${verb} LimoAnywhere. ${err.friendly()}`;
     }
     throw err;
   }
@@ -22643,81 +22658,72 @@ function friendly(err) {
   return err instanceof LaError ? err.friendly() : `Unexpected error: ${err.message}`;
 }
 
-// dist/tools/limoanywhere/laConnect.js
-var laConnectStartTool = {
-  name: "la_connect_start",
-  title: "Connect LimoAnywhere (browser page)",
-  description: "Preferred LimoAnywhere setup. Serves a one-time page on this machine where the operator types their login into a normal browser form \u2014 the password never appears in this conversation. Returns the link to give them; it works only from this machine and expires after 10 minutes or one successful connection. After they submit, run la_check_connection to confirm.",
-  kind: "setup",
-  inputSchema: {},
-  handler: async () => {
-    const { url, expiresMinutes } = await startSetupPage();
-    return [
-      `The setup page is ready: ${url}`,
-      "Give the operator that link and have them open it in a browser on this machine.",
-      "It's served by the Otto AI plugin itself, so the login goes straight from",
-      "their browser to a file on this machine \u2014 never through this chat.",
-      "The page shows the trial terms and conditions, which they must accept",
-      "before the login is taken.",
-      `The link expires in ${expiresMinutes} minutes or after one successful connection`,
-      "(call la_connect_start again for a fresh one).",
-      "Once they've submitted, run la_check_connection to confirm."
-    ].join(" ");
+// dist/la/pendingActions.js
+import { randomBytes as randomBytes3 } from "node:crypto";
+import { existsSync as existsSync4, mkdirSync as mkdirSync4, readdirSync, readFileSync as readFileSync4, unlinkSync, writeFileSync as writeFileSync4 } from "node:fs";
+import path5 from "node:path";
+var TTL_MS = Number(process.env.MILES_PENDING_TTL_MS) > 0 ? Number(process.env.MILES_PENDING_TTL_MS) : 15 * 6e4;
+var PENDING_TTL_MINUTES = Math.max(1, Math.round(TTL_MS / 6e4));
+var TOKEN_RE = /^[A-Z2-9]{8}$/;
+function pendingDir() {
+  return path5.join(path5.dirname(credentialsFilePath()), "la-pending-actions");
+}
+var fileFor = (token) => path5.join(pendingDir(), `${token}.json`);
+function normalizeToken(raw) {
+  const t = raw.trim().toUpperCase();
+  return TOKEN_RE.test(t) ? t : void 0;
+}
+function newToken() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  return [...randomBytes3(8)].map((b) => alphabet[b % alphabet.length]).join("");
+}
+function readOne(file, now) {
+  try {
+    const p = JSON.parse(readFileSync4(file, "utf8"));
+    if (!(p.expiresAt > now)) {
+      unlinkSync(file);
+      return void 0;
+    }
+    return p;
+  } catch {
+    return void 0;
   }
-};
-var laConnectTool = {
-  name: "la_connect",
-  title: "Connect LimoAnywhere (fallback)",
-  description: "Fallback LimoAnywhere setup \u2014 prefer la_connect_start, which keeps the password out of this conversation. Takes the same three fields as the manage.mylimobiz.com login form, verifies them with LimoAnywhere first \u2014 nothing is saved if the login is rejected \u2014 and saves them on this machine, working immediately with no restart. The saved login is never sent to Limo Marketer. Use only when the operator can't open the la_connect_start page. The operator must accept the trial terms and conditions first: call the tool once without accept_terms to get the terms text, show it to them verbatim, and set accept_terms only after they explicitly agree.",
-  kind: "setup",
-  inputSchema: {
-    company_id: external_exports.string().describe("Company ID \u2014 the first field of the LimoAnywhere login form"),
-    username: external_exports.string().describe("LimoAnywhere username"),
-    password: external_exports.string().describe("LimoAnywhere password (stored only in a file on this machine)"),
-    accept_terms: external_exports.boolean().optional().describe("Set true only after the operator has been shown the terms and conditions and explicitly agreed to them")
-  },
-  logArgs: (args) => ({ company_id: args.company_id, accept_terms: args.accept_terms }),
-  handler: async (_deps, args) => {
-    if (args.accept_terms !== true) {
-      return [
-        "Before connecting, the operator must read and accept the trial terms and",
-        "conditions. Show them this text verbatim:",
-        `
-
----
-${TERMS_AND_CONDITIONS}
----
-
-`,
-        "Nothing was verified or saved. If \u2014 and only if \u2014 they explicitly agree,",
-        "call la_connect again with the same login plus accept_terms: true."
-      ].join(" ");
-    }
-    const companyId = String(args.company_id ?? "").trim();
-    const username = String(args.username ?? "").trim();
-    const password = String(args.password ?? "");
-    if (!companyId || !username || !password) {
-      return "All three fields are needed \u2014 company ID, username, and password: the same three things typed into the manage.mylimobiz.com login form.";
-    }
-    const creds = { companyId, username, password };
-    try {
-      invalidateSession(creds);
-      await laLogin(creds);
-    } catch (err) {
-      if (err instanceof LaError) {
-        return `That login didn't work, so nothing was saved. ${err.friendly()}`;
-      }
-      throw err;
-    }
-    const file = writeCredentialsFile(creds);
-    return [
-      `Connected \u2014 LimoAnywhere accepted the login for company ${companyId} as ${username}.`,
-      `The login is saved on this machine (readable only by this user) at ${file},`,
-      "and it's live now \u2014 no restart needed.",
-      "Run la_check_connection for the full health check."
-    ].join(" ");
+}
+function sweep(now) {
+  if (!existsSync4(pendingDir()))
+    return;
+  for (const name of readdirSync(pendingDir())) {
+    if (name.endsWith(".json"))
+      readOne(path5.join(pendingDir(), name), now);
   }
-};
+}
+function createPending(action, now = Date.now()) {
+  sweep(now);
+  mkdirSync4(pendingDir(), { recursive: true });
+  const entry = { token: newToken(), action, createdAt: now, expiresAt: now + TTL_MS };
+  writeFileSync4(fileFor(entry.token), JSON.stringify(entry, null, 2) + "\n", { mode: 384, flag: "wx" });
+  return entry;
+}
+function peekPending(token, now = Date.now()) {
+  const t = normalizeToken(token);
+  if (!t || !existsSync4(fileFor(t)))
+    return void 0;
+  return readOne(fileFor(t), now);
+}
+function takePending(token, now = Date.now()) {
+  const t = normalizeToken(token);
+  if (!t)
+    return void 0;
+  const found = peekPending(t, now);
+  if (!found)
+    return void 0;
+  try {
+    unlinkSync(fileFor(t));
+  } catch {
+    return void 0;
+  }
+  return found;
+}
 
 // node_modules/node-html-parser/dist/index.mjs
 var __create2 = Object.create;
@@ -24018,15 +24024,15 @@ function getElementsByTagType(type, nodes, recurse = true, limit = Infinity) {
   return filter(Checks["tag_type"](type), nodes, recurse, limit);
 }
 function removeSubsets$1(nodes) {
-  let idx = nodes.length;
-  while (--idx >= 0) {
-    const node = nodes[idx];
-    if (idx > 0 && nodes.lastIndexOf(node, idx - 1) >= 0) {
-      nodes.splice(idx, 1);
+  let idx2 = nodes.length;
+  while (--idx2 >= 0) {
+    const node = nodes[idx2];
+    if (idx2 > 0 && nodes.lastIndexOf(node, idx2 - 1) >= 0) {
+      nodes.splice(idx2, 1);
       continue;
     }
     for (let ancestor = node.parent; ancestor; ancestor = ancestor.parent) if (nodes.includes(ancestor)) {
-      nodes.splice(idx, 1);
+      nodes.splice(idx2, 1);
       break;
     }
   }
@@ -24055,13 +24061,13 @@ function compareDocumentPosition(nodeA, nodeB) {
     current = current.parent;
   }
   const maxIdx = Math.min(aParents.length, bParents.length);
-  let idx = 0;
-  while (idx < maxIdx && aParents[idx] === bParents[idx]) idx++;
-  if (idx === 0) return DocumentPosition.DISCONNECTED;
-  const sharedParent = aParents[idx - 1];
+  let idx2 = 0;
+  while (idx2 < maxIdx && aParents[idx2] === bParents[idx2]) idx2++;
+  if (idx2 === 0) return DocumentPosition.DISCONNECTED;
+  const sharedParent = aParents[idx2 - 1];
   const siblings = sharedParent.children;
-  const aSibling = aParents[idx];
-  const bSibling = bParents[idx];
+  const aSibling = aParents[idx2];
+  const bSibling = bParents[idx2];
   if (siblings.indexOf(aSibling) > siblings.indexOf(bSibling)) {
     if (sharedParent === nodeB) return DocumentPosition.FOLLOWING | DocumentPosition.CONTAINED_BY;
     return DocumentPosition.FOLLOWING;
@@ -24819,8 +24825,8 @@ var attributeRules = {
     if (shouldIgnoreCase(data, options)) {
       value = value.toLowerCase();
       return (elem) => {
-        const attr = adapter.getAttributeValue(elem, name);
-        return attr != null && attr.length === value.length && attr.toLowerCase() === value && next(elem);
+        const attr2 = adapter.getAttributeValue(elem, name);
+        return attr2 != null && attr2.length === value.length && attr2.toLowerCase() === value && next(elem);
       };
     }
     return (elem) => adapter.getAttributeValue(elem, name) === value && next(elem);
@@ -24833,13 +24839,13 @@ var attributeRules = {
     if (shouldIgnoreCase(data, options)) {
       value = value.toLowerCase();
       return function hyphenIC(elem) {
-        const attr = adapter.getAttributeValue(elem, name);
-        return attr != null && (attr.length === len || attr.charAt(len) === "-") && attr.substr(0, len).toLowerCase() === value && next(elem);
+        const attr2 = adapter.getAttributeValue(elem, name);
+        return attr2 != null && (attr2.length === len || attr2.charAt(len) === "-") && attr2.substr(0, len).toLowerCase() === value && next(elem);
       };
     }
     return function hyphen(elem) {
-      const attr = adapter.getAttributeValue(elem, name);
-      return attr != null && (attr.length === len || attr.charAt(len) === "-") && attr.substr(0, len) === value && next(elem);
+      const attr2 = adapter.getAttributeValue(elem, name);
+      return attr2 != null && (attr2.length === len || attr2.charAt(len) === "-") && attr2.substr(0, len) === value && next(elem);
     };
   },
   element(next, data, options) {
@@ -24848,8 +24854,8 @@ var attributeRules = {
     if (/\s/.test(value)) return import_boolbase.default.falseFunc;
     const regex = new RegExp(`(?:^|\\s)${escapeRegex2(value)}(?:$|\\s)`, shouldIgnoreCase(data, options) ? "i" : "");
     return function element(elem) {
-      const attr = adapter.getAttributeValue(elem, name);
-      return attr != null && attr.length >= value.length && regex.test(attr) && next(elem);
+      const attr2 = adapter.getAttributeValue(elem, name);
+      return attr2 != null && attr2.length >= value.length && regex.test(attr2) && next(elem);
     };
   },
   exists(next, { name }, { adapter }) {
@@ -24864,8 +24870,8 @@ var attributeRules = {
     if (shouldIgnoreCase(data, options)) {
       value = value.toLowerCase();
       return (elem) => {
-        const attr = adapter.getAttributeValue(elem, name);
-        return attr != null && attr.length >= len && attr.substr(0, len).toLowerCase() === value && next(elem);
+        const attr2 = adapter.getAttributeValue(elem, name);
+        return attr2 != null && attr2.length >= len && attr2.substr(0, len).toLowerCase() === value && next(elem);
       };
     }
     return (elem) => {
@@ -24898,8 +24904,8 @@ var attributeRules = {
     if (shouldIgnoreCase(data, options)) {
       const regex = new RegExp(escapeRegex2(value), "i");
       return function anyIC(elem) {
-        const attr = adapter.getAttributeValue(elem, name);
-        return attr != null && attr.length >= value.length && regex.test(attr) && next(elem);
+        const attr2 = adapter.getAttributeValue(elem, name);
+        return attr2 != null && attr2.length >= value.length && regex.test(attr2) && next(elem);
       };
     }
     return (elem) => {
@@ -24915,8 +24921,8 @@ var attributeRules = {
     else if (shouldIgnoreCase(data, options)) {
       value = value.toLowerCase();
       return (elem) => {
-        const attr = adapter.getAttributeValue(elem, name);
-        return (attr == null || attr.length !== value.length || attr.toLowerCase() !== value) && next(elem);
+        const attr2 = adapter.getAttributeValue(elem, name);
+        return (attr2 == null || attr2.length !== value.length || attr2.toLowerCase() !== value) && next(elem);
       };
     }
     return (elem) => adapter.getAttributeValue(elem, name) !== value && next(elem);
@@ -24935,41 +24941,41 @@ function parse$4(formula) {
   formula = formula.trim().toLowerCase();
   if (formula === "even") return [2, 0];
   else if (formula === "odd") return [2, 1];
-  let idx = 0;
+  let idx2 = 0;
   let a = 0;
   let sign = readSign();
   let number3 = readNumber();
-  if (idx < formula.length && formula.charAt(idx) === "n") {
-    idx++;
+  if (idx2 < formula.length && formula.charAt(idx2) === "n") {
+    idx2++;
     a = sign * (number3 !== null && number3 !== void 0 ? number3 : 1);
     skipWhitespace();
-    if (idx < formula.length) {
+    if (idx2 < formula.length) {
       sign = readSign();
       skipWhitespace();
       number3 = readNumber();
     } else sign = number3 = 0;
   }
-  if (number3 === null || idx < formula.length) throw new Error(`n-th rule couldn't be parsed ('${formula}')`);
+  if (number3 === null || idx2 < formula.length) throw new Error(`n-th rule couldn't be parsed ('${formula}')`);
   return [a, sign * number3];
   function readSign() {
-    if (formula.charAt(idx) === "-") {
-      idx++;
+    if (formula.charAt(idx2) === "-") {
+      idx2++;
       return -1;
     }
-    if (formula.charAt(idx) === "+") idx++;
+    if (formula.charAt(idx2) === "+") idx2++;
     return 1;
   }
   function readNumber() {
-    const start = idx;
+    const start = idx2;
     let value = 0;
-    while (idx < formula.length && formula.charCodeAt(idx) >= ZERO && formula.charCodeAt(idx) <= NINE) {
-      value = value * 10 + (formula.charCodeAt(idx) - ZERO);
-      idx++;
+    while (idx2 < formula.length && formula.charCodeAt(idx2) >= ZERO && formula.charCodeAt(idx2) <= NINE) {
+      value = value * 10 + (formula.charCodeAt(idx2) - ZERO);
+      idx2++;
     }
-    return idx === start ? null : value;
+    return idx2 === start ? null : value;
   }
   function skipWhitespace() {
-    while (idx < formula.length && whitespace.has(formula.charCodeAt(idx))) idx++;
+    while (idx2 < formula.length && whitespace.has(formula.charCodeAt(idx2))) idx2++;
   }
 }
 function compile$2(parsed) {
@@ -25459,23 +25465,23 @@ function getText(node) {
   return node.text;
 }
 function removeSubsets(nodes) {
-  let idx = nodes.length;
+  let idx2 = nodes.length;
   let node;
   let ancestor;
   let replace;
-  while (--idx > -1) {
-    node = ancestor = nodes[idx];
-    nodes[idx] = null;
+  while (--idx2 > -1) {
+    node = ancestor = nodes[idx2];
+    nodes[idx2] = null;
     replace = true;
     while (ancestor) {
       if (nodes.indexOf(ancestor) > -1) {
         replace = false;
-        nodes.splice(idx, 1);
+        nodes.splice(idx2, 1);
         break;
       }
       ancestor = getParent(ancestor);
     }
-    if (replace) nodes[idx] = node;
+    if (replace) nodes[idx2] = node;
   }
   return nodes;
 }
@@ -25749,9 +25755,9 @@ var HTMLElement = class HTMLElement2 extends Node {
   * @param attr attribute value
   * @returns {string} quoted value
   */
-  quoteAttribute(attr) {
-    if (attr == null) return "null";
-    return `"${attr.replace(/"/g, "&quot;")}"`;
+  quoteAttribute(attr2) {
+    if (attr2 == null) return "null";
+    return `"${attr2.replace(/"/g, "&quot;")}"`;
   }
   /**
   * Creates an instance of HTMLElement.
@@ -25917,14 +25923,14 @@ var HTMLElement = class HTMLElement2 extends Node {
       }
       return [];
     }).flat();
-    const idx = parent.childNodes.findIndex((child) => {
+    const idx2 = parent.childNodes.findIndex((child) => {
       return child === this;
     });
     resetParent([this], null);
     parent.childNodes = [
-      ...parent.childNodes.slice(0, idx),
+      ...parent.childNodes.slice(0, idx2),
       ...resetParent(content, parent),
-      ...parent.childNodes.slice(idx + 1)
+      ...parent.childNodes.slice(idx2 + 1)
     ];
     return this;
   }
@@ -26835,6 +26841,719 @@ function labelPairs(root) {
   return pairs;
 }
 
+// dist/la/formReplay.js
+var SKIPPED_INPUT_TYPES = /* @__PURE__ */ new Set(["submit", "button", "reset", "image", "file"]);
+function attr(el, name) {
+  return el.getAttribute(name);
+}
+function isDisabled(el) {
+  return el.hasAttribute("disabled");
+}
+function optionValue(opt) {
+  return attr(opt, "value") ?? opt.text;
+}
+function selectValues(sel) {
+  const options = sel.querySelectorAll("option").filter((o) => !isDisabled(o));
+  const selected = options.filter((o) => o.hasAttribute("selected"));
+  if (sel.hasAttribute("multiple"))
+    return selected.map(optionValue);
+  const chosen = selected.length > 0 ? selected[selected.length - 1] : options[0];
+  return chosen ? [optionValue(chosen)] : [];
+}
+function findForm(html, formName) {
+  const root = parseLaHtml(html);
+  const form = root.querySelector(`form[name="${formName}"]`);
+  if (!form)
+    throw new Error(`LimoAnywhere's page has no "${formName}" form \u2014 the screen may have changed.`);
+  return form;
+}
+function formAction(html, formName) {
+  return attr(findForm(html, formName), "action");
+}
+function serializeForm(html, formName) {
+  const form = findForm(html, formName);
+  const out = [];
+  for (const el of form.querySelectorAll("input, select, textarea")) {
+    const name = attr(el, "name");
+    if (!name || isDisabled(el))
+      continue;
+    const tag = el.tagName.toLowerCase();
+    if (tag === "select") {
+      for (const v of selectValues(el))
+        out.push([name, v]);
+    } else if (tag === "textarea") {
+      out.push([name, el.text.replace(/^\r?\n/, "")]);
+    } else {
+      const type = (attr(el, "type") ?? "text").toLowerCase();
+      if (SKIPPED_INPUT_TYPES.has(type))
+        continue;
+      if ((type === "checkbox" || type === "radio") && !el.hasAttribute("checked"))
+        continue;
+      const value = attr(el, "value") ?? (type === "checkbox" || type === "radio" ? "on" : "");
+      out.push([name, value]);
+    }
+  }
+  return out;
+}
+function selectOptions(html, formName, selectName) {
+  const sel = findForm(html, formName).querySelector(`select[name="${selectName}"]`);
+  if (!sel)
+    return [];
+  return sel.querySelectorAll("option").map((o) => ({ value: optionValue(o), text: o.text.replace(/\s+/g, " ").trim() }));
+}
+function applyOverlay(fields, changes) {
+  const names = new Set(fields.map(([k]) => k));
+  const missing = Object.keys(changes).filter((k) => !names.has(k));
+  if (missing.length > 0) {
+    throw new Error(`The LimoAnywhere form has no field(s) ${missing.join(", ")} \u2014 the screen may have changed.`);
+  }
+  const seen = /* @__PURE__ */ new Set();
+  return fields.flatMap(([k, v]) => {
+    if (!(k in changes))
+      return [[k, v]];
+    if (seen.has(k))
+      return [];
+    seen.add(k);
+    return [[k, changes[k]]];
+  });
+}
+function fieldValue(fields, name) {
+  return fields.find(([k]) => k === name)?.[1];
+}
+function resolveOption(options, wanted) {
+  const norm = (s) => s.toLowerCase().replace(/\s+/g, " ").trim();
+  const w = norm(wanted);
+  const usable = options.filter((o) => o.value !== "" && o.value !== "0" && !/NOT ASSIGNED/i.test(o.text));
+  const exact = usable.filter((o) => norm(o.value) === w || norm(o.text) === w || norm(o.value.replace(/\|.*$/, "")) === w);
+  if (exact.length === 1)
+    return { option: exact[0] };
+  const partial2 = usable.filter((o) => norm(o.text).includes(w) || norm(o.value).includes(w));
+  if (partial2.length === 1)
+    return { option: partial2[0] };
+  return { candidates: partial2.length > 0 ? partial2 : usable };
+}
+
+// dist/la/rateTotals.js
+var num = (v) => {
+  const n = Number((v ?? "").replace(/[$,\s]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+};
+var money2 = (n) => (Math.round(n * 100) / 100).toFixed(2);
+var idx = (fields, name) => (fieldValue(fields, name) ?? "").split(";").filter(Boolean).map(Number);
+function flatRateRow(fields) {
+  const rows = Number(fieldValue(fields, "theCount") ?? 0);
+  const byName = Array.from({ length: rows }, (_, i) => i + 1).find((i) => /^flat\s*rate$/i.test((fieldValue(fields, `Descr${i}`) ?? "").trim()));
+  if (byName)
+    return byName;
+  const first = idx(fields, "BaseRateCntF").find((i) => fieldValue(fields, `DefAmt${i}`) !== void 0);
+  return first;
+}
+function currentFlatRate(fields) {
+  const row = flatRateRow(fields);
+  return row && fieldValue(fields, `DefAmt${row}`) || "0.00";
+}
+function withFlatRate(fields, flatRate) {
+  const flatRow = flatRateRow(fields);
+  if (!flatRow)
+    throw new Error("The reservation form has no Flat Rate row \u2014 LimoAnywhere's rate table may have changed.");
+  const changes = {
+    [`DefAmt${flatRow}`]: money2(flatRate),
+    [`DefAmtRate${flatRow}`]: String(flatRate)
+  };
+  const withRate = applyOverlay(fields, changes);
+  const base = idx(withRate, "BaseRateCntF").reduce((s, i) => s + num(fieldValue(withRate, `DefAmt${i}`)), 0) + idx(withRate, "BaseRateCntM").reduce((s, i) => s + num(fieldValue(withRate, `DefMulti${i}`)) * num(fieldValue(withRate, `DefMultiB${i}`)), 0);
+  const pct = (i) => num(fieldValue(withRate, `DefPercA${i}`)) / 100 * base;
+  const groupTotal = (cnt, flat, multi) => idx(withRate, cnt).reduce((s, i) => s + pct(i), 0) + idx(withRate, flat).reduce((s, i) => s + num(fieldValue(withRate, `DefAmt${i}`)), 0) + idx(withRate, multi).reduce((s, i) => s + num(fieldValue(withRate, `DefMulti${i}`)) * num(fieldValue(withRate, `DefMultiB${i}`)), 0);
+  const pctChanges = {};
+  for (const cnt of ["GratRateCntPr", "Surch1Cnt", "Surch2Cnt", "Surch3Cnt", "Surch4Cnt", "Surch5Cnt", "TaxCnt", "Disc3Cnt"]) {
+    for (const i of idx(withRate, cnt)) {
+      if (fieldValue(withRate, `DefPercB${i}`) !== void 0)
+        pctChanges[`DefPercB${i}`] = money2(pct(i));
+    }
+  }
+  const grat = idx(withRate, "GratRateCntPr").reduce((s, i) => s + pct(i), 0) + idx(withRate, "GratRateCntF").reduce((s, i) => s + num(fieldValue(withRate, `DefAmt${i}`)), 0);
+  const misc = groupTotal("MiscRateCntPr", "MiscRateCntF", "MiscRateCntM");
+  const surcharges = [1, 2, 3, 4, 5].map((n) => groupTotal(`Surch${n}Cnt`, `Surch${n}CntF`, `Surch${n}CntM`));
+  const tax = idx(withRate, "TaxCnt").reduce((s, i) => s + pct(i), 0);
+  const discounts = idx(withRate, "Disc1CntF").reduce((s, i) => s + num(fieldValue(withRate, `DefAmt${i}`)), 0) + idx(withRate, "Disc3Cnt").reduce((s, i) => s + pct(i), 0);
+  const grand = base + grat + misc + surcharges.reduce((a, b) => a + b, 0) + tax - discounts;
+  const deposits = num(fieldValue(withRate, "pmtDeposits"));
+  const totals = {
+    BaseRTot: String(Math.round(base * 100) / 100),
+    GratTot: String(Math.round(grat * 100) / 100),
+    MiscTot: String(Math.round(misc * 100) / 100),
+    TaxTot: String(Math.round(tax * 100) / 100),
+    Disc1Tot: String(Math.round(discounts * 100) / 100),
+    GrandTot: money2(grand),
+    totalDue: money2(grand - deposits)
+  };
+  surcharges.forEach((s, i) => {
+    totals[`Surch${i + 1}Tot`] = String(Math.round(s * 100) / 100);
+  });
+  const present = Object.fromEntries(Object.entries({ ...pctChanges, ...totals }).filter(([k]) => fieldValue(withRate, k) !== void 0));
+  return applyOverlay(withRate, present);
+}
+function rateTotalsIfSet(fields, flatRate) {
+  return flatRate === void 0 ? fields : withFlatRate(fields, flatRate);
+}
+
+// dist/la/writeInputs.js
+var WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+function normalizeLaDate(input) {
+  const s = input.trim();
+  let y, m, d;
+  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  const us = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
+  if (iso)
+    [y, m, d] = [Number(iso[1]), Number(iso[2]), Number(iso[3])];
+  else if (us)
+    [m, d, y] = [Number(us[1]), Number(us[2]), Number(us[3].length === 2 ? `20${us[3]}` : us[3])];
+  else
+    return void 0;
+  const date3 = new Date(y, m - 1, d);
+  if (date3.getFullYear() !== y || date3.getMonth() !== m - 1 || date3.getDate() !== d)
+    return void 0;
+  return `${String(m).padStart(2, "0")}/${String(d).padStart(2, "0")}/${y}`;
+}
+function laWeekday(mmddyyyy) {
+  const [m, d, y] = mmddyyyy.split("/").map(Number);
+  return WEEKDAYS[new Date(y, m - 1, d).getDay()];
+}
+function normalizeLaTime(input) {
+  const s = input.trim().toLowerCase().replace(/\s+/g, "");
+  const m = s.match(/^(\d{1,2})(?::?(\d{2}))?(am|pm|a|p)?$/);
+  if (!m)
+    return void 0;
+  let hours = Number(m[1]);
+  const minutes = Number(m[2] ?? "0");
+  const suffix = m[3]?.[0];
+  if (minutes > 59)
+    return void 0;
+  if (suffix) {
+    if (hours < 1 || hours > 12)
+      return void 0;
+    if (suffix === "p" && hours !== 12)
+      hours += 12;
+    if (suffix === "a" && hours === 12)
+      hours = 0;
+  } else if (hours > 23)
+    return void 0;
+  const period = hours >= 12 ? "PM" : "AM";
+  const h12 = hours % 12 === 0 ? 12 : hours % 12;
+  return `${String(h12).padStart(2, "0")}:${String(minutes).padStart(2, "0")} ${period}`;
+}
+function normalizePhone(input) {
+  if (!input)
+    return void 0;
+  const digits = input.replace(/\D/g, "");
+  return digits.length >= 7 ? digits : void 0;
+}
+function normalizeMoney(input) {
+  if (input === void 0)
+    return void 0;
+  const n = typeof input === "number" ? input : Number(String(input).replace(/[$,\s]/g, ""));
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : void 0;
+}
+function describeStop(s) {
+  return [s.label, s.address, `${s.city}, ${s.state.toUpperCase()}${s.zip ? ` ${s.zip}` : ""}`].filter(Boolean).join(", ");
+}
+
+// dist/la/writeClient.js
+var LA_WRITE_ALLOWLIST = {
+  // Allocates a blank reservation (id, code and Conf #) — the first step of a create.
+  "/admin/manageRes.asp": { queryAction: /* @__PURE__ */ new Set(["startRes"]), method: "GET" },
+  // Saves the full reservation form (create and edit alike).
+  "/admin/forms/form_handler_reservation.asp": { queryAction: /* @__PURE__ */ new Set(["saveRes"]), method: "POST" },
+  // Adds/orders routing stops on a trip.
+  "/admin/_forms/form_handler_routing.asp": { formAction: /* @__PURE__ */ new Set(["addAddr", "sortRoute"]), method: "POST" },
+  // Trip notes and dispatch notes.
+  "/admin/_forms/form_handler_notes.asp": {
+    formAction: /* @__PURE__ */ new Set(["addNotes", "updateTripDispatchNotes"]),
+    method: "POST"
+  }
+};
+function formValue(form, key) {
+  if (!form)
+    return void 0;
+  if (Array.isArray(form)) {
+    return form.find(([k]) => k === key)?.[1];
+  }
+  return form[key];
+}
+function assertWriteAllowed(url, opts) {
+  const rule = LA_WRITE_ALLOWLIST[url.pathname];
+  const refuse = (why) => {
+    throw new LaError(403, why, url.pathname, `Refused by Otto's write guard: ${why}. Otto only makes the specific changes its prepare-then-confirm tools offer; anything else has to be done in LimoAnywhere directly.`);
+  };
+  if (!rule)
+    refuse(`"${url.pathname}" isn't a supported write handler`);
+  const method = opts.method ?? "GET";
+  if (method !== rule.method)
+    refuse(`${method} isn't allowed for ${url.pathname}`);
+  const action = url.searchParams.get("action");
+  if (rule.queryAction && (!action || !rule.queryAction.has(action))) {
+    refuse(`action "${action ?? "(none)"}" isn't a supported write for ${url.pathname}`);
+  }
+  const formAction2 = formValue(opts.form, "action");
+  if (rule.formAction && (!formAction2 || !rule.formAction.has(formAction2))) {
+    refuse(`form action "${formAction2 ?? "(none)"}" isn't a supported write for ${url.pathname}`);
+  }
+}
+async function laWrite(creds, path6, opts = {}) {
+  const url = laUrl(path6, opts.query);
+  assertWriteAllowed(url, opts);
+  return laRequest(creds, url, opts);
+}
+
+// dist/la/reservationWrites.js
+var RES_FORM = "frmAddRes";
+function parseReservationForm(html) {
+  const fields = serializeForm(html, RES_FORM);
+  const idTrip = fieldValue(fields, "idTrip");
+  const tripCode = fieldValue(fields, "tripCode");
+  const action = formAction(html, RES_FORM);
+  if (!idTrip || !tripCode || !action) {
+    throw new Error("LimoAnywhere's reservation form is missing its trip id, code or save action \u2014 the screen may have changed.");
+  }
+  const savePath = new URL(action, `${LA_BASE}/admin/manageRes.asp`);
+  return {
+    idTrip,
+    tripCode,
+    confNumber: html.match(/Conf#[\s\S]{0,400}?(\d{3,8})\s*</)?.[1],
+    unsaved: /has not been saved/i.test(html),
+    fields,
+    savePath: savePath.pathname + savePath.search,
+    options: (select) => selectOptions(html, RES_FORM, select)
+  };
+}
+async function loadReservationForm(creds, idTrip, tripCode) {
+  const html = await laFetch(creds, "/admin/manageRes.asp", {
+    query: { action: "showResForm", idTrip, tripCode }
+  });
+  return parseReservationForm(html);
+}
+async function startReservation(creds) {
+  const res = await laWrite(creds, "/admin/manageRes.asp", { query: { action: "startRes" } });
+  const target = res.location ? new URL(res.location, `${LA_BASE}/admin/`) : void 0;
+  const idTrip = target?.searchParams.get("idTrip") ?? void 0;
+  const tripCode = target?.searchParams.get("tripCode") ?? void 0;
+  try {
+    if (idTrip && tripCode)
+      return await loadReservationForm(creds, idTrip, tripCode);
+    return parseReservationForm(res.text);
+  } catch (err) {
+    throw new DraftAllocatedError(idTrip, err);
+  }
+}
+var DraftAllocatedError = class extends Error {
+  idTrip;
+  cause;
+  constructor(idTrip, cause) {
+    super(`allocated draft${idTrip ? ` (trip ${idTrip})` : ""} but could not continue: ${cause.message}`);
+    this.idTrip = idTrip;
+    this.cause = cause;
+  }
+};
+async function addRoutingStop(creds, trip, type, stop) {
+  const body = {
+    action: "addAddr",
+    idTripRt: "",
+    idTrip: trip.idTrip,
+    tripCode: trip.tripCode,
+    tripRtLocation: "ADDR",
+    tripRtType: type,
+    tripRtPos: type === "PU" ? "1" : type === "DO" ? "99" : "2",
+    tripRtTimeIn: "",
+    tripRtName: stop.label ?? "",
+    tripRtAddr1: stop.address,
+    tripRtAddr2: "",
+    tripRtCity: stop.city,
+    tripRtState: stop.state.toUpperCase(),
+    tripRtZip: stop.zip ?? "",
+    tripRtCountry: "US",
+    tripRtPhone: "",
+    tripRtNotes: "",
+    tripRtSpecialInstr: "",
+    tripRtMisc1: "",
+    tripRtMisc2: "",
+    tripRtMisc3: "",
+    tripRtMisc4: "",
+    tripRtLng: "",
+    tripRtLat: "",
+    idCont: "0",
+    tripRtCounty: "",
+    tripTimeZone: "",
+    tripPUDate: ""
+  };
+  const res = await laWrite(creds, "/admin/_forms/form_handler_routing.asp", { method: "POST", form: body });
+  const id = res.text.trim().split(",").pop()?.trim();
+  if (!id || !/^\d+$/.test(id)) {
+    throw new LaError(502, res.text, "/admin/_forms/form_handler_routing.asp", "LimoAnywhere didn't confirm the routing stop was added.");
+  }
+  return id;
+}
+async function sortRoutingStops(creds, idTrip, stopIds) {
+  await laWrite(creds, "/admin/_forms/form_handler_routing.asp", {
+    method: "POST",
+    form: { action: "sortRoute", idsRoute: stopIds.join(","), idTrip }
+  });
+}
+var WRITABLE_FIELDS = /* @__PURE__ */ new Set([
+  "contName",
+  "contCompany",
+  "passFName",
+  "passLName",
+  "passPhone",
+  "passEmail",
+  "tripPUDate",
+  "tripPUTime",
+  "tripPaxNumber",
+  "tripLuggageCount",
+  "tripDuration",
+  "svcCodeList",
+  "tripVehTypeList",
+  "tripStatus",
+  "idDriver",
+  "carList",
+  "newNotes",
+  "tripDispatchNotes",
+  "tripConfirm",
+  "tripNotify",
+  // derived by derivedChanges()
+  "tripsvcCode",
+  "tripVehType",
+  "tripPUDay",
+  "hidTripPUDate",
+  "idCar"
+]);
+function assertWritableFields(changes) {
+  const bad = Object.keys(changes).filter((k) => !WRITABLE_FIELDS.has(k));
+  if (bad.length > 0) {
+    throw new Error(`Otto doesn't change the field(s) ${bad.join(", ")} on a reservation \u2014 nothing was saved.`);
+  }
+  if (changes.tripConfirm !== void 0 && changes.tripConfirm !== "NA")
+    throw new Error("Otto never turns on confirmation sending.");
+  if (changes.tripNotify !== void 0 && changes.tripNotify !== "NA")
+    throw new Error("Otto never turns on change notifications.");
+}
+function derivedChanges(changes) {
+  const out = { ...changes };
+  if (changes.svcCodeList !== void 0)
+    out.tripsvcCode = changes.svcCodeList;
+  if (changes.tripVehTypeList !== void 0)
+    out.tripVehType = changes.tripVehTypeList.replace(/\|.*$/, "");
+  if (changes.tripPUDate !== void 0) {
+    out.tripPUDay = laWeekday(changes.tripPUDate);
+    out.hidTripPUDate = changes.tripPUDate;
+  }
+  if (changes.carList !== void 0)
+    out.idCar = changes.carList;
+  return out;
+}
+function buildSaveBody(form, changes, flatRate) {
+  assertWritableFields(changes);
+  const derived = derivedChanges(changes);
+  const present = Object.fromEntries(Object.entries(derived).filter(([k]) => fieldValue(form.fields, k) !== void 0 || k in changes));
+  return rateTotalsIfSet(applyOverlay(form.fields, present), flatRate);
+}
+async function saveReservation(creds, form, changes, flatRate) {
+  const body = buildSaveBody(form, changes, flatRate);
+  const save = new URL(form.savePath, LA_BASE);
+  const res = await laWrite(creds, save.pathname, {
+    method: "POST",
+    query: Object.fromEntries(save.searchParams.entries()),
+    form: body
+  });
+  if (res.status === 200 && /error|not allowed|invalid/i.test(res.text.slice(0, 3e3)) && !/frmAddRes/.test(res.text)) {
+    throw new LaError(502, res.text, save.pathname, "LimoAnywhere didn't accept the save. Nothing else was changed.");
+  }
+  const saved = await loadReservationForm(creds, form.idTrip, form.tripCode);
+  if (fieldValue(saved.fields, "status") !== "exst" || saved.unsaved) {
+    throw new LaError(502, res.text.slice(0, 500), save.pathname, "LimoAnywhere answered the save but the reservation still shows as unsaved.");
+  }
+  return saved;
+}
+function escapeNote(text) {
+  return text.replace(/"/g, "&#34;").replace(/'/g, "&#39;").replace(/\\/g, "&#92;");
+}
+async function addTripNote(creds, idTrip, note, opts = {}) {
+  await postNote(creds, {
+    action: "addNotes",
+    idTrip,
+    newNotes: encodeURIComponent(escapeNote(note)),
+    addTo: opts.addToTripSheet ? "Yes" : "No",
+    hideFrom: opts.hideFromCustomer ? "Yes" : "No"
+  });
+}
+async function updateDispatchNotes(creds, idTrip, notes) {
+  await postNote(creds, {
+    action: "updateTripDispatchNotes",
+    idTrip,
+    tripDispatchNotes: encodeURIComponent(escapeNote(notes))
+  });
+}
+async function postNote(creds, form) {
+  const path6 = "/admin/_forms/form_handler_notes.asp";
+  let res = await laWrite(creds, path6, { method: "POST", form });
+  if (res.text.trim() === "SessionExpired") {
+    invalidateSession(creds);
+    res = await laWrite(creds, path6, { method: "POST", form });
+    if (res.text.trim() === "SessionExpired") {
+      throw new LaError(401, res.text, path6, "LimoAnywhere's session expired while saving the note. Try again.");
+    }
+  }
+}
+
+// dist/la/statusCodes.js
+var LA_STATUS_LABELS = {
+  Wting: "Additional Waiting Time",
+  ARR: "Arrived",
+  ASN: "Assigned",
+  CXL: "Cancelled",
+  CXLAF: "Cancelled by Affiliate",
+  CIRCL: "Circling",
+  CCC: "Contract Pending",
+  CVRCXL: "COVID-19 Cancellation",
+  CIC: "Customer In Car",
+  DSP: "Dispatched",
+  DON: "Done",
+  FOA: "Farm-out Assigned",
+  FOU: "Farm-out Unassigned",
+  FTC: "Flight Time Change",
+  GSN: "Get Status Now!",
+  LCX: "Late Cancel",
+  NSH: "No Show",
+  OFR: "Offered",
+  OLC: "On Location",
+  OTW: "On The Way",
+  TMP: "Online and eFarm In",
+  PND: "Pending",
+  UNA: "Unassigned",
+  LST: "Waiting List"
+};
+var LA_DEAD_STATUSES = /* @__PURE__ */ new Set([
+  "Cancelled",
+  "Cancelled by Affiliate",
+  "COVID-19 Cancellation",
+  "No Show"
+]);
+function statusLabel(code) {
+  if (!code)
+    return void 0;
+  return LA_STATUS_LABELS[code] ?? code;
+}
+
+// dist/la/writeActions.js
+function actionHeadline(action) {
+  switch (action.kind) {
+    case "create_reservation":
+      return "Create a new reservation";
+    case "update_reservation":
+      return `Update reservation #${action.confNumber}`;
+    case "add_note":
+      return `Add a ${action.target === "dispatch" ? "dispatch" : "trip"} note to reservation #${action.confNumber}`;
+  }
+}
+async function executeAction(creds, action) {
+  switch (action.kind) {
+    case "create_reservation":
+      return executeCreate(creds, action);
+    case "update_reservation":
+      return executeUpdate(creds, action);
+    case "add_note":
+      return executeNote(creds, action);
+  }
+}
+var plain = (err) => err instanceof LaError ? err.friendly() : err.message;
+async function executeCreate(creds, action) {
+  let draft;
+  try {
+    draft = await startReservation(creds);
+  } catch (err) {
+    if (err instanceof DraftAllocatedError) {
+      return {
+        text: `LimoAnywhere allocated a blank reservation${err.idTrip ? ` (trip id ${err.idTrip})` : ""} but Otto couldn't open it to fill it in: ${plain(err.cause)} It will show in LimoAnywhere as an unsaved draft \u2014 open it there to complete or delete it. This token is spent; prepare again to retry.`
+      };
+    }
+    throw err;
+  }
+  const conf = draft.confNumber ? `#${draft.confNumber}` : `trip id ${draft.idTrip}`;
+  try {
+    const stopIds = [await addRoutingStop(creds, draft, "PU", action.pickup)];
+    if (action.dropoff)
+      stopIds.push(await addRoutingStop(creds, draft, "DO", action.dropoff));
+    if (stopIds.length > 1)
+      await sortRoutingStops(creds, draft.idTrip, stopIds);
+    const form = await loadReservationForm(creds, draft.idTrip, draft.tripCode);
+    const saved = await saveReservation(creds, form, action.fieldChanges, action.flatRate);
+    const lines = [
+      `Created reservation **${saved.confNumber ? `#${saved.confNumber}` : conf}** in LimoAnywhere.`,
+      ...action.summary.map((s) => `- ${s}`),
+      `- Status: ${statusLabel(fieldValue(saved.fields, "tripStatusOld")) ?? "Unassigned"}`,
+      `- Grand total on the form: $${fieldValue(saved.fields, "GrandTot") ?? "0.00"}`,
+      "",
+      `No confirmation email was sent (LimoAnywhere's send options were left at "Do Not Send"). Open the reservation in LimoAnywhere to add payment details or send the confirmation.`
+    ];
+    return { text: lines.join("\n") };
+  } catch (err) {
+    return {
+      text: `LimoAnywhere allocated reservation ${conf} but the save didn't finish: ${plain(err)} It will show as an unsaved draft in LimoAnywhere \u2014 open it there to complete or delete it. This token is spent; prepare again to retry.`
+    };
+  }
+}
+async function executeUpdate(creds, action) {
+  const form = await loadReservationForm(creds, action.idTrip, action.tripCode);
+  const saved = await saveReservation(creds, form, action.fieldChanges, action.flatRate);
+  const kept = Object.entries(action.fieldChanges).filter(([k, v]) => {
+    const now = fieldValue(saved.fields, k === "tripStatus" ? "tripStatusOld" : k);
+    return now !== void 0 && now !== v;
+  });
+  const lines = [
+    `Updated reservation **#${action.confNumber}** in LimoAnywhere.`,
+    ...action.summary.map((s) => `- ${s}`),
+    `- Status now: ${statusLabel(fieldValue(saved.fields, "tripStatusOld")) ?? "\u2014"} \xB7 Grand total on the form: $${fieldValue(saved.fields, "GrandTot") ?? "\u2014"}`
+  ];
+  if (kept.length > 0) {
+    lines.push("", `LimoAnywhere kept a different value for: ${kept.map(([k]) => k).join(", ")} \u2014 open the reservation to check.`);
+  }
+  return { text: lines.join("\n") };
+}
+async function executeNote(creds, action) {
+  if (action.target === "dispatch") {
+    await updateDispatchNotes(creds, action.idTrip, action.note);
+    return { text: `Dispatch notes on reservation **#${action.confNumber}** now read:
+
+> ${action.note}` };
+  }
+  await addTripNote(creds, action.idTrip, action.note, { hideFromCustomer: action.hideFromCustomer });
+  return {
+    text: `Added a trip note to reservation **#${action.confNumber}**${action.hideFromCustomer ? " (hidden from the customer)" : ""}:
+
+> ${action.note}`
+  };
+}
+function renderPreview(action, token, ttlMinutes) {
+  const lines = [
+    `### ${actionHeadline(action)}`,
+    "",
+    ...action.summary.map((s) => `- ${s}`)
+  ];
+  if (action.kind === "create_reservation") {
+    lines.push(`- Pickup: ${describeStop(action.pickup)}`);
+    if (action.dropoff)
+      lines.push(`- Drop-off: ${describeStop(action.dropoff)}`);
+    lines.push('- Confirmation email: not sent (left at "Do Not Send")');
+  }
+  lines.push("", `**Nothing has been changed yet.** Show this to the operator and ask them to confirm. If they say yes, call la_confirm_action with token \`${token}\` (valid ${ttlMinutes} minutes, one use). If they want something different, prepare again instead of confirming.`);
+  return lines.join("\n");
+}
+
+// dist/tools/limoanywhere/laConfirmAction.js
+var laConfirmActionTool = {
+  name: "la_confirm_action",
+  title: "Confirm a prepared LimoAnywhere change",
+  description: `Step 2 of 2: performs a change previously prepared by la_prepare_reservation, la_prepare_reservation_update or la_prepare_note, identified by its token. Call this ONLY after the operator has seen the preview and explicitly said yes \u2014 it is the one tool that changes LimoAnywhere. Tokens are single-use and expire after ${PENDING_TTL_MINUTES} minutes; if the operator changed their mind or wants something different, prepare again instead.`,
+  kind: "write",
+  inputSchema: {
+    token: external_exports.string().describe("The token from the prepare step's preview.")
+  },
+  logArgs: () => ({}),
+  handler: ({ cfg }, args) => {
+    const token = String(args.token ?? "").trim();
+    if (!token)
+      return Promise.resolve("Give me the token from the preview you prepared.");
+    const pending = peekPending(token);
+    if (!pending) {
+      return Promise.resolve(`No prepared change matches token ${token} \u2014 it may have been used already or expired (they last ${PENDING_TTL_MINUTES} minutes). Prepare the change again and show the operator the new preview.`);
+    }
+    return runLaTool(cfg, async (creds) => {
+      const taken = takePending(token);
+      if (!taken)
+        return `Token ${token} was just used by another call. Nothing was done twice.`;
+      const result = await executeAction(creds, taken.action);
+      return `**Done \u2014 ${actionHeadline(taken.action).toLowerCase()}.**
+
+${result.text}`;
+    }, "make the change in");
+  }
+};
+
+// dist/tools/limoanywhere/laConnect.js
+var laConnectStartTool = {
+  name: "la_connect_start",
+  title: "Connect LimoAnywhere (browser page)",
+  description: "Preferred LimoAnywhere setup. Serves a one-time page on this machine where the operator types their login into a normal browser form \u2014 the password never appears in this conversation. Returns the link to give them; it works only from this machine and expires after 10 minutes or one successful connection. After they submit, run la_check_connection to confirm.",
+  kind: "setup",
+  inputSchema: {},
+  handler: async () => {
+    const { url, expiresMinutes } = await startSetupPage();
+    return [
+      `The setup page is ready: ${url}`,
+      "Give the operator that link and have them open it in a browser on this machine.",
+      "It's served by the Otto AI plugin itself, so the login goes straight from",
+      "their browser to a file on this machine \u2014 never through this chat.",
+      "The page shows the trial terms and conditions, which they must accept",
+      "before the login is taken.",
+      `The link expires in ${expiresMinutes} minutes or after one successful connection`,
+      "(call la_connect_start again for a fresh one).",
+      "Once they've submitted, run la_check_connection to confirm."
+    ].join(" ");
+  }
+};
+var laConnectTool = {
+  name: "la_connect",
+  title: "Connect LimoAnywhere (fallback)",
+  description: "Fallback LimoAnywhere setup \u2014 prefer la_connect_start, which keeps the password out of this conversation. Takes the same three fields as the manage.mylimobiz.com login form, verifies them with LimoAnywhere first \u2014 nothing is saved if the login is rejected \u2014 and saves them on this machine, working immediately with no restart. The saved login is never sent to Limo Marketer. Use only when the operator can't open the la_connect_start page. The operator must accept the trial terms and conditions first: call the tool once without accept_terms to get the terms text, show it to them verbatim, and set accept_terms only after they explicitly agree.",
+  kind: "setup",
+  inputSchema: {
+    company_id: external_exports.string().describe("Company ID \u2014 the first field of the LimoAnywhere login form"),
+    username: external_exports.string().describe("LimoAnywhere username"),
+    password: external_exports.string().describe("LimoAnywhere password (stored only in a file on this machine)"),
+    accept_terms: external_exports.boolean().optional().describe("Set true only after the operator has been shown the terms and conditions and explicitly agreed to them")
+  },
+  logArgs: (args) => ({ company_id: args.company_id, accept_terms: args.accept_terms }),
+  handler: async (_deps, args) => {
+    if (args.accept_terms !== true) {
+      return [
+        "Before connecting, the operator must read and accept the trial terms and",
+        "conditions. Show them this text verbatim:",
+        `
+
+---
+${TERMS_AND_CONDITIONS}
+---
+
+`,
+        "Nothing was verified or saved. If \u2014 and only if \u2014 they explicitly agree,",
+        "call la_connect again with the same login plus accept_terms: true."
+      ].join(" ");
+    }
+    const companyId = String(args.company_id ?? "").trim();
+    const username = String(args.username ?? "").trim();
+    const password = String(args.password ?? "");
+    if (!companyId || !username || !password) {
+      return "All three fields are needed \u2014 company ID, username, and password: the same three things typed into the manage.mylimobiz.com login form.";
+    }
+    const creds = { companyId, username, password };
+    try {
+      invalidateSession(creds);
+      await laLogin(creds);
+    } catch (err) {
+      if (err instanceof LaError) {
+        return `That login didn't work, so nothing was saved. ${err.friendly()}`;
+      }
+      throw err;
+    }
+    const file = writeCredentialsFile(creds);
+    return [
+      `Connected \u2014 LimoAnywhere accepted the login for company ${companyId} as ${username}.`,
+      `The login is saved on this machine (readable only by this user) at ${file},`,
+      "and it's live now \u2014 no restart needed.",
+      "Run la_check_connection for the full health check."
+    ].join(" ");
+  }
+};
+
 // dist/la/parseLists.js
 function parseQuoteRows(html) {
   const root = parseLaHtml(html);
@@ -27021,45 +27740,6 @@ var laGetQuoteTool = {
     });
   }
 };
-
-// dist/la/statusCodes.js
-var LA_STATUS_LABELS = {
-  Wting: "Additional Waiting Time",
-  ARR: "Arrived",
-  ASN: "Assigned",
-  CXL: "Cancelled",
-  CXLAF: "Cancelled by Affiliate",
-  CIRCL: "Circling",
-  CCC: "Contract Pending",
-  CVRCXL: "COVID-19 Cancellation",
-  CIC: "Customer In Car",
-  DSP: "Dispatched",
-  DON: "Done",
-  FOA: "Farm-out Assigned",
-  FOU: "Farm-out Unassigned",
-  FTC: "Flight Time Change",
-  GSN: "Get Status Now!",
-  LCX: "Late Cancel",
-  NSH: "No Show",
-  OFR: "Offered",
-  OLC: "On Location",
-  OTW: "On The Way",
-  TMP: "Online and eFarm In",
-  PND: "Pending",
-  UNA: "Unassigned",
-  LST: "Waiting List"
-};
-var LA_DEAD_STATUSES = /* @__PURE__ */ new Set([
-  "Cancelled",
-  "Cancelled by Affiliate",
-  "COVID-19 Cancellation",
-  "No Show"
-]);
-function statusLabel(code) {
-  if (!code)
-    return void 0;
-  return LA_STATUS_LABELS[code] ?? code;
-}
 
 // dist/la/parseReservation.js
 function parseReservationDetail(html) {
@@ -27551,6 +28231,368 @@ var laListReservationsTool = {
   }
 };
 
+// dist/tools/limoanywhere/laWriteCommon.js
+var confNumberArg = external_exports.string().describe("The reservation's Conf #, e.g. 98175.");
+function cleanConf(raw) {
+  const conf = String(raw ?? "").trim().replace(/^#/, "");
+  return /^\d{3,8}$/.test(conf) ? conf : void 0;
+}
+async function locateReservation(creds, conf) {
+  const found = await findReservationByConf(creds, conf);
+  if (!found) {
+    return { problem: `No reservation with Conf # ${conf} was found on any LimoAnywhere screen (new, online, unfinalized, or deleted).` };
+  }
+  if (!found.row.idTrip || !found.row.tripCode) {
+    return { problem: `Reservation #${conf} exists but its detail link couldn't be read \u2014 LimoAnywhere may have changed its layout.` };
+  }
+  if (found.tab === "deleted") {
+    return { problem: `Reservation #${conf} is on the Deleted Reservations screen; Otto doesn't change deleted trips.` };
+  }
+  if (found.tab === "online") {
+    return {
+      problem: `Reservation #${conf} is an online / eFarm-in booking that hasn't been accepted yet. Otto doesn't accept or edit those \u2014 accept it in LimoAnywhere first, then it can be changed here.`
+    };
+  }
+  return { form: await loadReservationForm(creds, found.row.idTrip, found.row.tripCode), tab: found.tab };
+}
+async function loadReferenceForm(creds) {
+  const { rows } = await fetchReservationRows(creds, { sortBy: "tripPUDate", sortOrder: "DESC" });
+  const row = rows.find((r) => r.idTrip && r.tripCode);
+  return row ? loadReservationForm(creds, row.idTrip, row.tripCode) : void 0;
+}
+function resolveChoice(options, wanted, what) {
+  const r = resolveOption(options, wanted);
+  if ("option" in r)
+    return { value: r.option.value, label: r.option.text };
+  const list = r.candidates.map((c) => c.text).filter(Boolean).slice(0, 25);
+  const head = list.length > 0 && r.candidates.length < options.length ? "Did you mean one of" : "The choices are";
+  return { problem: `I couldn't match ${what} "${wanted}". ${head}: ${list.join("; ")}.` };
+}
+function dryRunSave(form, changes, flatRate) {
+  try {
+    buildSaveBody(form, changes, flatRate);
+    return void 0;
+  } catch (err) {
+    return `${err.message} Nothing was prepared.`;
+  }
+}
+function notificationWarning(form) {
+  const confirm = form.fields.find(([k]) => k === "tripConfirm")?.[1] ?? "NA";
+  const notify = form.fields.find(([k]) => k === "tripNotify")?.[1] ?? "NA";
+  if (confirm === "NA" && notify === "NA")
+    return void 0;
+  return `Heads-up: this reservation's confirmation / change-notification setting is not "Do Not Send", so LimoAnywhere itself may email or fax the customer when it is saved (Otto doesn't change that setting).`;
+}
+function parkAction(action) {
+  const pending = createPending(action);
+  return renderPreview(action, pending.token, PENDING_TTL_MINUTES);
+}
+
+// dist/tools/limoanywhere/laPrepareNote.js
+var laPrepareNoteTool = {
+  name: "la_prepare_note",
+  title: "Prepare a note on a LimoAnywhere reservation",
+  description: "Step 1 of 2 for adding a note to an existing reservation without changing anything else. A trip note is appended to the reservation's notes; dispatch notes (driver-facing) are replaced with the text given. Returns a preview and a one-time token \u2014 NOTHING is written until la_confirm_action is called with that token after the operator says yes.",
+  kind: "write",
+  inputSchema: {
+    confirmation_number: confNumberArg,
+    note: external_exports.string().min(1).max(4e3).describe("The note text."),
+    kind: external_exports.enum(["trip", "dispatch"]).optional().describe("trip (default) = customer-visible trip notes; dispatch = driver-facing dispatch notes."),
+    hide_from_customer: external_exports.boolean().optional().describe("For trip notes: keep it off customer-facing documents (default false).")
+  },
+  logArgs: (args) => ({ confirmation_number: args.confirmation_number, kind: args.kind }),
+  handler: ({ cfg }, args) => runLaTool(cfg, async (creds) => {
+    const conf = cleanConf(args.confirmation_number);
+    if (!conf)
+      return "Give me the reservation's Conf # (a number like 98175).";
+    const note = String(args.note ?? "").trim();
+    if (!note)
+      return "What should the note say?";
+    const located = await locateReservation(creds, conf);
+    if ("problem" in located)
+      return located.problem;
+    const { form } = located;
+    const target = args.kind ?? "trip";
+    const hide = args.hide_from_customer === true;
+    const who = `${fieldValue(form.fields, "passFName") ?? ""} ${fieldValue(form.fields, "passLName") ?? ""}`.trim();
+    const action = {
+      kind: "add_note",
+      confNumber: conf,
+      idTrip: form.idTrip,
+      target,
+      note,
+      hideFromCustomer: hide,
+      summary: [
+        `Reservation #${conf}${who ? ` \u2014 ${who}` : ""}, pickup ${fieldValue(form.fields, "tripPUDate") ?? "\u2014"} ${fieldValue(form.fields, "tripPUTime") ?? ""}`,
+        target === "dispatch" ? `Dispatch notes will be replaced with: "${note}"` : `Trip note to add${hide ? " (hidden from the customer)" : ""}: "${note}"`
+      ]
+    };
+    return parkAction(action);
+  }, "prepare a change in")
+};
+
+// dist/tools/limoanywhere/laPrepareReservation.js
+var stopSchema = external_exports.object({
+  label: external_exports.string().optional().describe("Short name shown on the trip sheet, e.g. 'Orlando Intl Airport' or 'Home'."),
+  address: external_exports.string().describe("Street address line, e.g. '6000 Universal Blvd'."),
+  city: external_exports.string(),
+  state: external_exports.string().regex(/^[A-Za-z]{2}$/, "two-letter state").describe("Two-letter state, e.g. FL."),
+  zip: external_exports.string().optional()
+});
+var isPast = (mmddyyyy) => {
+  const [m, d, y] = mmddyyyy.split("/").map(Number);
+  const today = /* @__PURE__ */ new Date();
+  return new Date(y, m - 1, d) < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+};
+var laPrepareReservationTool = {
+  name: "la_prepare_reservation",
+  title: "Prepare a new LimoAnywhere reservation",
+  description: "Step 1 of 2 for booking a NEW reservation in LimoAnywhere. Checks the details (vehicle and service names must match the operator's own LimoAnywhere dropdowns), then returns a preview and a one-time token \u2014 NOTHING is created until la_confirm_action is called with that token after the operator says yes. Never call la_confirm_action without the operator's explicit go-ahead on the preview. No confirmation email is sent; payment details are not taken.",
+  kind: "write",
+  inputSchema: {
+    passenger_first_name: external_exports.string(),
+    passenger_last_name: external_exports.string(),
+    pickup_date: external_exports.string().describe("Pickup date, e.g. 2026-12-15 or 12/15/2026."),
+    pickup_time: external_exports.string().describe("Pickup time, e.g. '10:00 AM' or 14:30."),
+    pickup: stopSchema.describe("Where the passenger is picked up."),
+    dropoff: stopSchema.optional().describe("Where the passenger is dropped off (omit for hourly/as-directed)."),
+    vehicle_type: external_exports.string().describe("Vehicle type as the operator names it, e.g. 'Business Class Sedan', 'Sprinter'."),
+    service_type: external_exports.string().describe("Service type, e.g. Point-to-Point, From Airport, To Airport, Hourly, Transfer."),
+    passengers: external_exports.number().int().min(1).max(99).optional().describe("Passenger count (default 1)."),
+    luggage: external_exports.number().int().min(0).max(99).optional(),
+    passenger_phone: external_exports.string().optional(),
+    passenger_email: external_exports.string().optional(),
+    billing_contact: external_exports.string().optional().describe("Name on the bill (defaults to the passenger)."),
+    company: external_exports.string().optional().describe("Company name for the bill, if any."),
+    flat_rate: external_exports.union([external_exports.number(), external_exports.string()]).optional().describe("Flat rate in dollars; fees the operator's rate table adds automatically are applied on top."),
+    trip_notes: external_exports.string().optional().describe("Notes for the trip (visible on the reservation)."),
+    hours: external_exports.number().min(0.5).max(24).optional().describe("Duration in hours for hourly/as-directed service (default 1).")
+  },
+  logArgs: (args) => ({ vehicle_type: args.vehicle_type, service_type: args.service_type }),
+  handler: ({ cfg }, args) => runLaTool(cfg, async (creds) => {
+    const first = String(args.passenger_first_name ?? "").trim();
+    const last = String(args.passenger_last_name ?? "").trim();
+    if (!first || !last)
+      return "I need the passenger's first and last name.";
+    const puDate = normalizeLaDate(String(args.pickup_date ?? ""));
+    if (!puDate)
+      return `I couldn't read the pickup date "${args.pickup_date}". Use YYYY-MM-DD or MM/DD/YYYY.`;
+    const puTime = normalizeLaTime(String(args.pickup_time ?? ""));
+    if (!puTime)
+      return `I couldn't read the pickup time "${args.pickup_time}". Use something like 10:00 AM or 14:30.`;
+    const flatRate = args.flat_rate === void 0 ? void 0 : normalizeMoney(args.flat_rate);
+    if (args.flat_rate !== void 0 && flatRate === void 0)
+      return `I couldn't read the flat rate "${args.flat_rate}".`;
+    const phone = normalizePhone(args.passenger_phone);
+    if (args.passenger_phone && !phone)
+      return `The phone number "${args.passenger_phone}" doesn't look complete.`;
+    const email2 = String(args.passenger_email ?? "").trim();
+    if (email2 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email2))
+      return `"${email2}" doesn't look like an email address.`;
+    const ref = await loadReferenceForm(creds);
+    if (!ref) {
+      return "I couldn't open a LimoAnywhere reservation form to check the vehicle and service names against. Book this one in LimoAnywhere directly.";
+    }
+    const vehicle = resolveChoice(ref.options("tripVehTypeList"), String(args.vehicle_type ?? ""), "the vehicle type");
+    if ("problem" in vehicle)
+      return vehicle.problem;
+    const service = resolveChoice(ref.options("svcCodeList"), String(args.service_type ?? ""), "the service type");
+    if ("problem" in service)
+      return service.problem;
+    const pickup = args.pickup;
+    const dropoff = args.dropoff;
+    const pax = String(args.passengers ?? 1);
+    const billing = String(args.billing_contact ?? "").trim() || `${first} ${last}`;
+    const fieldChanges = {
+      contName: billing,
+      passFName: first,
+      passLName: last,
+      tripPUDate: puDate,
+      tripPUTime: puTime,
+      tripPaxNumber: pax,
+      svcCodeList: service.value,
+      tripVehTypeList: vehicle.value,
+      tripConfirm: "NA",
+      tripNotify: "NA"
+    };
+    if (args.company)
+      fieldChanges.contCompany = String(args.company).trim();
+    if (args.luggage !== void 0)
+      fieldChanges.tripLuggageCount = String(args.luggage);
+    if (phone)
+      fieldChanges.passPhone = phone;
+    if (email2)
+      fieldChanges.passEmail = email2;
+    if (args.trip_notes)
+      fieldChanges.newNotes = String(args.trip_notes).trim();
+    if (args.hours !== void 0)
+      fieldChanges.tripDuration = String(args.hours);
+    const dry = dryRunSave(ref, fieldChanges, flatRate);
+    if (dry)
+      return dry;
+    const summary = [
+      `Passenger: ${first} ${last}${phone ? ` \xB7 ${phone}` : ""}${email2 ? ` \xB7 ${email2}` : ""}`,
+      `Pickup: ${puDate} at ${puTime}`,
+      `Service: ${service.label} \xB7 Vehicle: ${vehicle.label} \xB7 Passengers: ${pax}${args.luggage !== void 0 ? ` \xB7 Luggage: ${args.luggage}` : ""}`,
+      `Billing contact: ${billing}${args.company ? ` (${args.company})` : ""}`,
+      flatRate !== void 0 ? `Flat rate: $${flatRate.toFixed(2)} (the operator's automatic fees/taxes are added on the form)` : "Rate: left blank for the operator to price"
+    ];
+    if (args.trip_notes)
+      summary.push(`Trip notes: ${String(args.trip_notes).trim()}`);
+    if (dropoff === void 0)
+      summary.push(`Drop-off: none (${describeStop(pickup)} only)`);
+    if (isPast(puDate))
+      summary.push("Note: that pickup date is already in the past.");
+    const action = {
+      kind: "create_reservation",
+      fieldChanges,
+      flatRate,
+      pickup,
+      dropoff,
+      summary
+    };
+    return parkAction(action);
+  }, "prepare a change in")
+};
+
+// dist/tools/limoanywhere/laPrepareReservationUpdate.js
+var laPrepareReservationUpdateTool = {
+  name: "la_prepare_reservation_update",
+  title: "Prepare changes to a LimoAnywhere reservation",
+  description: "Step 1 of 2 for changing an EXISTING reservation: dispatch status (e.g. Assigned, Cancelled, Done, No Show), driver and car, pickup date/time, passenger count, vehicle or service type, flat rate, passenger phone/email, or the dispatch notes. Give only the fields to change. Returns a preview and a one-time token \u2014 NOTHING changes until la_confirm_action is called with that token after the operator says yes. Never confirm without their explicit go-ahead. To add a note without touching anything else, use la_prepare_note instead.",
+  kind: "write",
+  inputSchema: {
+    confirmation_number: confNumberArg,
+    status: external_exports.string().optional().describe("New dispatch status, by name or code: Assigned, Cancelled, Late Cancel, No Show, Done, Unassigned, Dispatched\u2026"),
+    driver: external_exports.string().optional().describe("Driver to assign, as named in LimoAnywhere (e.g. 'Juan'). 'none' unassigns."),
+    car: external_exports.string().optional().describe("Car to assign, as named in LimoAnywhere (e.g. 'SUV Suburban 14'). 'none' unassigns."),
+    pickup_date: external_exports.string().optional().describe("New pickup date, e.g. 2026-12-15."),
+    pickup_time: external_exports.string().optional().describe("New pickup time, e.g. '10:00 AM'."),
+    passengers: external_exports.number().int().min(1).max(99).optional(),
+    vehicle_type: external_exports.string().optional(),
+    service_type: external_exports.string().optional(),
+    flat_rate: external_exports.union([external_exports.number(), external_exports.string()]).optional().describe("New flat rate in dollars."),
+    passenger_phone: external_exports.string().optional(),
+    passenger_email: external_exports.string().optional(),
+    dispatch_notes: external_exports.string().optional().describe("Replaces the dispatch notes (driver-facing).")
+  },
+  logArgs: (args) => ({ confirmation_number: args.confirmation_number, status: args.status }),
+  handler: ({ cfg }, args) => runLaTool(cfg, async (creds) => {
+    const conf = cleanConf(args.confirmation_number);
+    if (!conf)
+      return "Give me the reservation's Conf # (a number like 98175).";
+    const located = await locateReservation(creds, conf);
+    if ("problem" in located)
+      return located.problem;
+    const { form } = located;
+    const changes = {};
+    const summary = [];
+    const before = (name) => fieldValue(form.fields, name) ?? "";
+    if (args.status !== void 0) {
+      const r = resolveChoice(form.options("tripStatus"), String(args.status), "the status");
+      if ("problem" in r)
+        return r.problem;
+      changes.tripStatus = r.value;
+      summary.push(`Status: ${statusLabel(before("tripStatusOld")) ?? "\u2014"} \u2192 ${r.label}`);
+    }
+    for (const [arg, field, what] of [["driver", "idDriver", "the driver"], ["car", "carList", "the car"]]) {
+      const wanted = args[arg];
+      if (wanted === void 0)
+        continue;
+      const options = form.options(field);
+      const current = options.find((o) => o.value === before(field))?.text || "none";
+      if (/^(none|unassign(ed)?|clear)$/i.test(wanted.trim())) {
+        changes[field] = "0";
+        summary.push(`${what[0].toUpperCase()}${what.slice(1)}: ${current} \u2192 none`);
+        continue;
+      }
+      const r = resolveChoice(options, wanted, what);
+      if ("problem" in r)
+        return r.problem;
+      changes[field] = r.value;
+      summary.push(`${what[0].toUpperCase()}${what.slice(1)}: ${current} \u2192 ${r.label}`);
+    }
+    if (args.pickup_date !== void 0) {
+      const d = normalizeLaDate(String(args.pickup_date));
+      if (!d)
+        return `I couldn't read the pickup date "${args.pickup_date}". Use YYYY-MM-DD or MM/DD/YYYY.`;
+      changes.tripPUDate = d;
+      summary.push(`Pickup date: ${before("tripPUDate")} \u2192 ${d}`);
+    }
+    if (args.pickup_time !== void 0) {
+      const t = normalizeLaTime(String(args.pickup_time));
+      if (!t)
+        return `I couldn't read the pickup time "${args.pickup_time}". Use something like 10:00 AM or 14:30.`;
+      changes.tripPUTime = t;
+      summary.push(`Pickup time: ${before("tripPUTime")} \u2192 ${t}`);
+    }
+    if (args.passengers !== void 0) {
+      changes.tripPaxNumber = String(args.passengers);
+      summary.push(`Passengers: ${before("tripPaxNumber")} \u2192 ${args.passengers}`);
+    }
+    if (args.vehicle_type !== void 0) {
+      const r = resolveChoice(form.options("tripVehTypeList"), String(args.vehicle_type), "the vehicle type");
+      if ("problem" in r)
+        return r.problem;
+      changes.tripVehTypeList = r.value;
+      summary.push(`Vehicle: ${before("tripVehType") || "\u2014"} \u2192 ${r.label}`);
+    }
+    if (args.service_type !== void 0) {
+      const r = resolveChoice(form.options("svcCodeList"), String(args.service_type), "the service type");
+      if ("problem" in r)
+        return r.problem;
+      changes.svcCodeList = r.value;
+      summary.push(`Service: ${before("tripsvcCode") || "\u2014"} \u2192 ${r.label}`);
+    }
+    let flatRate;
+    if (args.flat_rate !== void 0) {
+      flatRate = normalizeMoney(args.flat_rate);
+      if (flatRate === void 0)
+        return `I couldn't read the flat rate "${args.flat_rate}".`;
+      summary.push(`Flat rate: $${currentFlatRate(form.fields)} \u2192 $${flatRate.toFixed(2)} (automatic fees/taxes recalculated)`);
+    }
+    if (args.passenger_phone !== void 0) {
+      const p = normalizePhone(String(args.passenger_phone));
+      if (!p)
+        return `The phone number "${args.passenger_phone}" doesn't look complete.`;
+      changes.passPhone = p;
+      summary.push(`Passenger phone: ${before("passPhone") || "\u2014"} \u2192 ${p}`);
+    }
+    if (args.passenger_email !== void 0) {
+      const e = String(args.passenger_email).trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
+        return `"${e}" doesn't look like an email address.`;
+      changes.passEmail = e;
+      summary.push(`Passenger email: ${before("passEmail") || "\u2014"} \u2192 ${e}`);
+    }
+    if (args.dispatch_notes !== void 0) {
+      changes.tripDispatchNotes = String(args.dispatch_notes).trim();
+      summary.push(`Dispatch notes \u2192 "${changes.tripDispatchNotes}"`);
+    }
+    if (summary.length === 0)
+      return "Tell me what to change on this reservation (status, driver, car, pickup date/time, passengers, vehicle, service, flat rate, phone, email, or dispatch notes).";
+    const dry = dryRunSave(form, changes, flatRate);
+    if (dry)
+      return dry;
+    const warning = notificationWarning(form);
+    if (warning)
+      summary.push(warning);
+    const action = {
+      kind: "update_reservation",
+      confNumber: conf,
+      idTrip: form.idTrip,
+      tripCode: form.tripCode,
+      fieldChanges: changes,
+      flatRate,
+      summary: [
+        `Reservation #${conf} \u2014 ${before("passFName")} ${before("passLName")}, pickup ${before("tripPUDate")} ${before("tripPUTime")}`,
+        ...summary
+      ]
+    };
+    return parkAction(action);
+  }, "prepare a change in")
+};
+
 // dist/tools/limoanywhere/laQuoteConversionReport.js
 function nameTokens(name) {
   return new Set(name.toLowerCase().split(/[^a-z]+/).filter((t) => t.length >= 3));
@@ -27748,25 +28790,41 @@ var LA_TOOLS = [
   laQuoteConversionReportTool,
   laRevenueSummaryTool
 ];
+var LA_WRITE_TOOLS = [
+  laPrepareReservationTool,
+  laPrepareReservationUpdateTool,
+  laPrepareNoteTool,
+  laConfirmActionTool
+];
 var LA_SETUP_TOOLS = [laConnectStartTool, laConnectTool, laUpdateTool];
 
 // dist/laServer.js
-var SETUP_HINT = `LimoAnywhere isn't connected yet. Run the /otto-setup command \u2014 or call la_connect_start \u2014 to get a one-time link to a setup page on this machine, where the operator types their manage.mylimobiz.com login (company ID, username, password) into a normal browser form; the password never appears in this conversation. Recommend a dedicated view-only LimoAnywhere user rather than an admin login. The login is verified, then saved only on this machine. (For support: no saved login was found; this install keeps it at ${credentialsFilePath()}.)`;
+var SETUP_HINT = `LimoAnywhere isn't connected yet. Run the /otto-setup command \u2014 or call la_connect_start \u2014 to get a one-time link to a setup page on this machine, where the operator types their manage.mylimobiz.com login (company ID, username, password) into a normal browser form; the password never appears in this conversation. Recommend a dedicated LimoAnywhere user for Otto with reservation access rather than an admin login. The login is verified, then saved only on this machine. (For support: no saved login was found; this install keeps it at ${credentialsFilePath()}.)`;
 var LA_INSTRUCTIONS = [
-  "These tools read a limo operator's LimoAnywhere back office (reservations,",
-  "quotes, and the trip calendar). They are STRICTLY READ-ONLY \u2014 nothing here",
-  "can change, convert, or delete anything in LimoAnywhere, so you never need",
-  "to ask permission before reading. (The one exception that changes anything",
-  "at all is la_connect, which only saves the operator's LimoAnywhere login to",
-  "a file on this machine.) Compose them: the list tools answer",
-  '"how many / how much" questions, and la_get_quote / la_get_reservation pull',
-  "the full record when a specific trip matters. List scans stop at a page cap",
-  "and say so \u2014 narrow the date range rather than reporting a partial number as",
-  "if it were complete. Quote-to-reservation matching is heuristic (passenger",
-  "name plus pickup date), so present near-misses as leads to check, never as",
-  "verdicts. Money figures are reservation grand totals; farm-in/out costs and",
-  "settlements are not netted out, and cancelled or no-show trips are reported",
-  "separately from booked revenue."
+  "These tools work with a limo operator's LimoAnywhere back office (reservations,",
+  "quotes, and the trip calendar). The la_get_* / la_list_* / la_*_report /",
+  "la_check_connection tools are READ-ONLY \u2014 nothing there can change anything,",
+  "so you never need to ask permission before reading. Compose them: the list",
+  'tools answer "how many / how much" questions, and la_get_quote /',
+  "la_get_reservation pull the full record when a specific trip matters. List",
+  "scans stop at a page cap and say so \u2014 narrow the date range rather than",
+  "reporting a partial number as if it were complete. Quote-to-reservation",
+  "matching is heuristic (passenger name plus pickup date), so present",
+  "near-misses as leads to check, never as verdicts. Money figures are",
+  "reservation grand totals; farm-in/out costs and settlements are not netted",
+  "out, and cancelled or no-show trips are reported separately from booked revenue.",
+  "CHANGES to LimoAnywhere take two steps, always: an la_prepare_* tool",
+  "(la_prepare_reservation to book a new trip, la_prepare_reservation_update to",
+  "change status / driver / car / pickup / rate on an existing one, la_prepare_note",
+  "to add a note) returns a preview and a one-time token and changes nothing;",
+  "show the operator that preview and only after they explicitly say yes call",
+  "la_confirm_action with the token \u2014 that is the single tool that writes, and",
+  "the token is single-use and short-lived. Never confirm on the operator's",
+  "behalf, never confirm a preview they haven't seen, and if they want anything",
+  "different, prepare again. Otto cannot delete reservations, take payments,",
+  "convert quotes, or send emails from LimoAnywhere \u2014 say so and point to",
+  "LimoAnywhere itself. (la_connect only saves the operator's LimoAnywhere login",
+  "to a file on this machine.)"
 ].join(" ");
 if (process.argv.includes(SETUP_LAUNCHER_FLAG)) {
   runSetupLauncher();
@@ -27788,7 +28846,7 @@ if (process.argv.includes(SETUP_LAUNCHER_FLAG)) {
   };
   void updateNotice();
   const server = buildMcpServer(cfg, void 0, {
-    tools: [...LA_TOOLS, ...LA_SETUP_TOOLS],
+    tools: [...LA_TOOLS, ...LA_WRITE_TOOLS, ...LA_SETUP_TOOLS],
     name: "otto-limoanywhere",
     title: "Otto AI by Limo Marketer",
     instructions: LA_INSTRUCTIONS,

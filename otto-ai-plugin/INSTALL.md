@@ -6,8 +6,9 @@ here.
 
 **What the plugin is:** the **LimoAnywhere** half of Otto AI. It runs *on the
 operator's machine* as a bundled MCP server, signed in as their own
-LimoAnywhere user, strictly read-only — trip calendar, quotes, reservations,
-booked revenue.
+LimoAnywhere user — reading the trip calendar, quotes, reservations and booked
+revenue freely, and booking / updating / annotating reservations only after the
+operator confirms a preview (the prepare → confirm gate).
 
 **What the plugin is not:** GoHighLevel. That half stays a **separate hosted
 MCP connector** on Limo Marketer's server (Railway), added by URL
@@ -27,7 +28,7 @@ can use the plugin with or without it.
 | **Cowork must run LOCALLY** | **Set this at install time, before anything else.** The bundled LimoAnywhere server cannot run in cloud sessions — skills appear but the `la_*` tools don't. Personal (Pro/Max) accounts: Claude Desktop → Settings → Cowork → turn **off** "Run new tasks in the cloud", then fully restart the app. Team/Enterprise: an org admin sets execution mode under Organization Settings → Cowork. This is a Claude app setting — the plugin cannot set it programmatically, but `/otto-setup` and `/otto-doctor` detect the cloud-session symptom and walk the operator through flipping it. |
 | **Latest Claude Desktop** | Cowork requires it. |
 | **Windows only:** Virtual Machine Platform enabled | Cowork's requirement. |
-| **A LimoAnywhere login** | Company ID, username, password — the three fields from the manage.mylimobiz.com form. **Use a dedicated view-only "Otto AI" user**, not an admin login. |
+| **A LimoAnywhere login** | Company ID, username, password — the three fields from the manage.mylimobiz.com form. **Use a dedicated "Otto AI" user** with reservation access (view-only if the operator only wants reads), not an admin login. |
 
 ---
 
@@ -61,7 +62,7 @@ Optionally confirm the checkout is healthy first. All five gates pass with no
 npm run smoke          # stdio server boots, registers tools, degrades gracefully
 npm run smoke:la       # the local LimoAnywhere server specifically
 npm run smoke:http     # full hosted OAuth flow against an in-memory mock
-npm run test:isolation # two-tenant isolation + read-only audit
+npm test               # unit tests: form replay, read/write guards, pending store
 npm run test:la-creds  # LimoAnywhere credential linking
 ```
 
@@ -242,13 +243,16 @@ will include it in its report whenever it's present.
 If you're working on this rather than only testing it:
 
 - `src/laServer.ts` — the local LimoAnywhere MCP server entrypoint. Registers
-  only `LA_TOOLS` + `LA_SETUP_TOOLS`, and deliberately has no GoHighLevel
-  credential, vault, or write gate available to it.
-- `src/la/` — the LimoAnywhere access layer. **Read-only by construction:**
-  every request funnels through `laFetch`, whose `LA_READ_ALLOWLIST` refuses
-  anything not on the known read screens. `npm run test:isolation` audits this.
-- `src/tools/limoanywhere/` — the eight `la_*` read tools plus the three setup
-  tools (`la_connect_start`, `la_connect`, `la_update` — self-update lives in
+  only `LA_TOOLS` + `LA_WRITE_TOOLS` + `LA_SETUP_TOOLS`, and deliberately has
+  no GoHighLevel credential or vault available to it.
+- `src/la/` — the LimoAnywhere access layer. Reads funnel through `laFetch`,
+  whose `LA_READ_ALLOWLIST` refuses anything not on the known read screens;
+  writes funnel through `laWrite` (`writeClient.ts`), whose separate allowlist
+  names the exact handlers the gated write tools replay. `npm test` and
+  `npm run smoke:la` audit both.
+- `src/tools/limoanywhere/` — the eight `la_*` read tools, the four gated
+  write tools (`la_prepare_reservation`, `la_prepare_reservation_update`,
+  `la_prepare_note`, `la_confirm_action`), plus the three setup tools (`la_connect_start`, `la_connect`, `la_update` — self-update lives in
   the server because it's the only part of the plugin that always runs on the
   operator's host; see `src/la/update.ts`).
 - `plugins/otto-ai-plugin/` — the plugin package (skill, commands, manifests).
@@ -257,6 +261,6 @@ If you're working on this rather than only testing it:
 - `.claude/plan/distribution-model-review.md` — why the surfaces split this way.
 
 Read `CLAUDE.md` at the repo root before changing anything. It documents the
-invariants the test gates enforce: LimoAnywhere is strictly read-only, every
-GoHighLevel write goes through the prepare/confirm approval gate, and no tool
-ever accepts a location ID as input.
+invariants the test gates enforce: LimoAnywhere reads are read-only by
+construction, every write goes through the prepare/confirm approval gate and a
+separate write allowlist, and no tool ever accepts a location ID as input.

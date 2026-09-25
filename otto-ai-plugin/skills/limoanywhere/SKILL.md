@@ -1,19 +1,21 @@
 ---
 name: limoanywhere
-description: Reading a limo operator's LimoAnywhere back office through Otto AI — the trip calendar and daily schedule, quote requests and their conversion, reservations across the new/online/unfinalized/deleted screens, and booked revenue. Use whenever the question is about trips, jobs, runs, quotes, reservations, confirmation numbers, drivers, vehicles, or booked revenue.
+description: Working with a limo operator's LimoAnywhere back office through Otto AI — reading the trip calendar and daily schedule, quote requests and their conversion, reservations across the new/online/unfinalized/deleted screens, and booked revenue; and, with the operator's explicit confirmation, booking a new reservation, changing a reservation's status / driver / car / pickup / rate, or adding a note. Use whenever the question is about trips, jobs, runs, quotes, reservations, confirmation numbers, drivers, vehicles, booked revenue, or booking / assigning / cancelling a trip.
 ---
 
 # LimoAnywhere operations
 
-These tools read the operator's LimoAnywhere back office. They run **on this
-machine**, signed in as the operator's own LimoAnywhere user — so what you can
-see is exactly what they'd see in a browser.
+These tools work with the operator's LimoAnywhere back office. They run **on
+this machine**, signed in as the operator's own LimoAnywhere user — so what you
+can see is exactly what they'd see in a browser, and what you can change is
+exactly what that user could change.
 
-**Everything here is read-only.** Nothing in this toolset can convert a quote,
-save a reservation, assign a driver, or delete anything. You never need to ask
-permission before reading, and you should never imply a change was made. If the
-operator wants something changed, tell them plainly that Otto can't do it and
-they'll need to do it in LimoAnywhere directly.
+**Reading is free; changing takes two steps.** Every `la_get_*`, `la_list_*`,
+report and check tool is read-only — you never need to ask permission before
+reading. Changes go through a *prepare → confirm* gate described under
+"Making changes" below: the prepare tool shows a preview and changes nothing,
+and only `la_confirm_action`, called after the operator says yes, writes. Never
+imply a change was made until `la_confirm_action` has returned "Done".
 
 LimoAnywhere is the *operations* side (actual trips and money). If the
 session also has Otto AI's GoHighLevel connector — the *marketing* side
@@ -31,6 +33,9 @@ doesn't, stay on the operations side rather than guessing at marketing data.
 | "Pull up confirmation 97362" | `la_get_reservation` |
 | "Which quotes did we lose?" | `la_quote_conversion_report` |
 | "How much is booked this month / next month?" | `la_revenue_summary` |
+| "Book a trip for…" / "Put in a reservation" | `la_prepare_reservation`, then `la_confirm_action` |
+| "Assign Juan to 98175" / "Cancel 98175" / "Move it to 3pm" | `la_prepare_reservation_update`, then `la_confirm_action` |
+| "Add a note to 98175: gate code 1234" | `la_prepare_note`, then `la_confirm_action` |
 | Setup or something's broken | `la_check_connection` |
 
 `la_get_schedule` and `la_revenue_summary` both work for **future** dates. "How
@@ -95,6 +100,56 @@ operator acts on it.
 - **Flag the operationally interesting things** without being asked: an
   unassigned driver on a trip tomorrow, an unaccepted online booking, a large
   balance due on a job about to run.
+
+## Making changes
+
+Three things Otto can change, each in two steps:
+
+- **Book a new reservation** — `la_prepare_reservation`. Needs the passenger,
+  pickup date and time, pickup address, vehicle type and service type; drop-off,
+  passenger count, phone, email, flat rate and trip notes are optional. Vehicle,
+  service, driver and car names are matched against the operator's *own*
+  LimoAnywhere dropdowns, so "Sprinter" or "business class sedan" both work; if
+  a name doesn't match, the tool lists the real choices — pick with the operator
+  rather than guessing.
+- **Change an existing reservation** — `la_prepare_reservation_update`. Status
+  (Assigned, Cancelled, Late Cancel, No Show, Done…), driver, car, pickup date
+  or time, passengers, vehicle, service, flat rate, passenger phone/email, or
+  the dispatch notes. Give only what changes. Cancelling a trip is a status
+  change to Cancelled — Otto never deletes reservations.
+- **Add a note** — `la_prepare_note`. Appends a trip note (optionally hidden
+  from the customer) or replaces the driver-facing dispatch notes, without
+  touching anything else on the trip.
+
+The flow, every time:
+
+1. Call the prepare tool. It reads LimoAnywhere, resolves every name to the
+   operator's real options, and returns a **preview with a token**. Nothing has
+   changed yet.
+2. **Show the operator the preview** — what will be created or what goes from
+   what to what — and ask if it's right. Do not paraphrase away details like
+   the date, the rate, or which driver.
+3. **Only after they explicitly say yes**, call `la_confirm_action` with the
+   token. A "sure" to a different question, or silence, is not a yes. If they
+   want anything different, prepare again; never edit a preview in your head
+   and confirm the old token.
+4. Report exactly what `la_confirm_action` says came back. It re-reads the
+   reservation after saving, so if LimoAnywhere kept a different value it says
+   so — pass that on rather than smoothing it over.
+
+Tokens are single-use and expire after 15 minutes, so a stale approval can't
+fire later. If a token is refused, prepare again and show the new preview.
+
+What Otto deliberately does **not** do in LimoAnywhere: delete reservations,
+take or record payments, convert quotes, accept online bookings, or send
+confirmation emails and texts (a new reservation is saved with "Do Not Send",
+and the operator sends the confirmation from LimoAnywhere when they're ready).
+Say so plainly and point them to LimoAnywhere for those.
+
+A new reservation is saved with the flat rate given (LimoAnywhere's automatic
+fees and taxes are applied on top, exactly as its own form does), or with no
+rate for the operator to price. Read the grand total back from the
+confirmation message rather than quoting the flat rate as the price.
 
 ## When something isn't working
 
