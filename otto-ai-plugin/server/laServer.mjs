@@ -22313,6 +22313,8 @@ async function laRequest(creds, url, opts) {
     };
     if (opts.form)
       headers2["Content-Type"] = "application/x-www-form-urlencoded";
+    if (opts.json)
+      headers2["Content-Type"] = "application/json";
     if (opts.withVerificationToken) {
       headers2["__RequestVerificationToken"] = await getVerificationToken(session);
     }
@@ -22320,7 +22322,7 @@ async function laRequest(creds, url, opts) {
       method: opts.method ?? "GET",
       redirect: "manual",
       headers: headers2,
-      body: opts.form ? encodeForm(opts.form) : void 0
+      body: opts.form ? encodeForm(opts.form) : opts.json ? JSON.stringify(opts.json) : void 0
     });
     const text = await res2.text().catch(() => "");
     return { status: res2.status, location: res2.headers.get("location") ?? void 0, text };
@@ -22347,8 +22349,37 @@ var LA_READ_ALLOWLIST = {
     queryAction: /* @__PURE__ */ new Set(["showResList1", "showEResList", "showUnfList", "showDeleted", "showResForm"])
   },
   "/admin/_forms/schedulerDataBackEnd.asp": { formMethod: /* @__PURE__ */ new Set(["schedulerDataLoad"]) },
-  "/adminnew/ajax/GetVerificationToken": {}
+  "/adminnew/ajax/GetVerificationToken": {},
+  // The reservation's routing panel (its stops and their ids). The page
+  // loads it with a body-less POST on every view; frmTripRtEdit submits to
+  // the same URL WITH fields, so only the empty POST with the page's own
+  // query keys is a read.
+  "/admin/forms/form_IFRAME_routing.asp": {
+    emptyPost: true,
+    postOnly: true,
+    queryKeys: /* @__PURE__ */ new Set(["idCont", "idPass", "idTrip", "tripCode", "isArchive", "tab", "canEditRes", "isReservationSettled"])
+  },
+  // LimoAnywhere's own address lookup (lat/lng for a stop), as routing.js
+  // calls it — a JSON POST with exactly the page's keys.
+  "/adminnew/get_geocode": {
+    postOnly: true,
+    queryKeys: /* @__PURE__ */ new Set(),
+    jsonKeys: /* @__PURE__ */ new Set(["name", "addressline1", "address_line2", "city", "statecode", "postalcode", "countrycode"])
+  },
+  // One stop's full details, as the Edit button loads them into its dialog.
+  // The same handler SAVES stops (addAddr/sortRoute — write allowlist only);
+  // here only action=editRoute with its exact body is a read.
+  "/admin/_forms/form_handler_routing.asp": {
+    postOnly: true,
+    queryKeys: /* @__PURE__ */ new Set(),
+    formAction: { actions: /* @__PURE__ */ new Set(["editRoute"]), keys: /* @__PURE__ */ new Set(["action", "idtriproute", "idTrip", "isArchive"]) }
+  }
 };
+function formEntries(form) {
+  if (!form)
+    return [];
+  return Array.isArray(form) ? form : Object.entries(form);
+}
 function assertReadOnly(url, opts) {
   const rule = LA_READ_ALLOWLIST[url.pathname];
   const refuse = (why) => {
@@ -22360,12 +22391,44 @@ function assertReadOnly(url, opts) {
   if (rule.queryAction && (!action || !rule.queryAction.has(action))) {
     refuse(`action "${action ?? "(none)"}" isn't an allowlisted read action for ${url.pathname}`);
   }
-  if (opts.method === "POST") {
-    const form = opts.form;
-    const formMethod = Array.isArray(form) ? form.find(([k]) => k === "method")?.[1] : form?.method;
-    if (!rule.formMethod || !formMethod || !rule.formMethod.has(formMethod)) {
-      refuse(`POST "${formMethod ?? "(no method)"}" isn't an allowlisted read call for ${url.pathname}`);
+  if (rule.queryKeys) {
+    const extra = [...url.searchParams.keys()].filter((k) => !rule.queryKeys.has(k));
+    if (extra.length > 0)
+      refuse(`query ${extra.join(", ")} isn't part of the ${url.pathname} read`);
+  }
+  const post = opts.method === "POST";
+  if (rule.postOnly && !post)
+    refuse(`${url.pathname} is only read the way the page does it, with a POST`);
+  if (!post)
+    return;
+  if (opts.json !== void 0 || rule.jsonKeys) {
+    if (!rule.jsonKeys || opts.json === void 0 || opts.form !== void 0) {
+      refuse(`${url.pathname} doesn't take ${opts.json === void 0 ? "a form" : "a JSON"} body as a read`);
     }
+    const extra = Object.keys(opts.json).filter((k) => !rule.jsonKeys.has(k));
+    if (extra.length > 0)
+      refuse(`field(s) ${extra.join(", ")} aren't part of the ${url.pathname} read`);
+    return;
+  }
+  const entries = formEntries(opts.form);
+  if (rule.emptyPost) {
+    if (entries.length > 0)
+      refuse(`${url.pathname} is only read with an empty request, not a form submission`);
+    return;
+  }
+  if (rule.formAction) {
+    const formAct = entries.find(([k]) => k === "action")?.[1];
+    if (!formAct || !rule.formAction.actions.has(formAct)) {
+      refuse(`form action "${formAct ?? "(none)"}" isn't an allowlisted read for ${url.pathname}`);
+    }
+    const extra = entries.map(([k]) => k).filter((k) => !rule.formAction.keys.has(k));
+    if (extra.length > 0)
+      refuse(`field(s) ${extra.join(", ")} aren't part of the ${url.pathname} read`);
+    return;
+  }
+  const formMethod = entries.find(([k]) => k === "method")?.[1];
+  if (!rule.formMethod || !formMethod || !rule.formMethod.has(formMethod)) {
+    refuse(`POST "${formMethod ?? "(no method)"}" isn't an allowlisted read call for ${url.pathname}`);
   }
 }
 async function laFetch(creds, path6, opts = {}) {
@@ -26927,7 +26990,7 @@ function fieldValue(fields, name) {
   return fields.find(([k]) => k === name)?.[1];
 }
 function resolveOption(options, wanted) {
-  const norm = (s) => s.toLowerCase().replace(/\s+/g, " ").trim();
+  const norm = (s) => s.toLowerCase().replace(/[-_/]+/g, " ").replace(/\s+/g, " ").trim();
   const w = norm(wanted);
   const usable = options.filter((o) => o.value !== "" && o.value !== "0" && !/NOT ASSIGNED/i.test(o.text));
   const exact = usable.filter((o) => norm(o.value) === w || norm(o.text) === w || norm(o.value.replace(/\|.*$/, "")) === w);
@@ -26937,6 +27000,107 @@ function resolveOption(options, wanted) {
   if (partial2.length === 1)
     return { option: partial2[0] };
   return { candidates: partial2.length > 0 ? partial2 : usable };
+}
+
+// dist/la/statusCodes.js
+var LA_STATUS_LABELS = {
+  Wting: "Additional Waiting Time",
+  ARR: "Arrived",
+  ASN: "Assigned",
+  CXL: "Cancelled",
+  CXLAF: "Cancelled by Affiliate",
+  CIRCL: "Circling",
+  CCC: "Contract Pending",
+  CVRCXL: "COVID-19 Cancellation",
+  CIC: "Customer In Car",
+  DSP: "Dispatched",
+  DON: "Done",
+  FOA: "Farm-out Assigned",
+  FOU: "Farm-out Unassigned",
+  FTC: "Flight Time Change",
+  GSN: "Get Status Now!",
+  LCX: "Late Cancel",
+  NSH: "No Show",
+  OFR: "Offered",
+  OLC: "On Location",
+  OTW: "On The Way",
+  TMP: "Online and eFarm In",
+  PND: "Pending",
+  UNA: "Unassigned",
+  LST: "Waiting List"
+};
+var LA_DEAD_STATUSES = /* @__PURE__ */ new Set([
+  "Cancelled",
+  "Cancelled by Affiliate",
+  "COVID-19 Cancellation",
+  "No Show"
+]);
+function statusLabel(code) {
+  if (!code)
+    return void 0;
+  return LA_STATUS_LABELS[code] ?? code;
+}
+
+// dist/la/parseReservation.js
+function pageEditLocked(html) {
+  return /\bcanEditReservation\s*=\s*false\b/.test(html) || /\breservationStatus\s*=\s*["']STL["']/.test(html);
+}
+function parseReservationDetail(html) {
+  const root = parseLaHtml(html);
+  const pairs = labelPairs(root);
+  const grandTotal = parseMoney(inputValue(root, "GrandTot"));
+  const paymentsDeposits = parseMoney(inputValue(root, "pmtDeposits"));
+  const totalDue = grandTotal !== void 0 ? Math.round((grandTotal - (paymentsDeposits ?? 0)) * 100) / 100 : void 0;
+  const first = inputValue(root, "passFName");
+  const last = inputValue(root, "passLName");
+  const bookedFirst = inputValue(root, "bookedFName");
+  const bookedLast = inputValue(root, "bookedLName");
+  return {
+    status: statusLabel(inputValue(root, "tripStatusOld")),
+    reservationState: inputValue(root, "reservationState"),
+    reservedAt: pairs.get("date/time"),
+    reservedBy: pairs.get("res. by"),
+    billingContact: inputValue(root, "contName"),
+    company: inputValue(root, "contCompany"),
+    bookedBy: [bookedFirst, bookedLast].filter(Boolean).join(" ") || void 0,
+    bookedByPhone: inputValue(root, "bookedContPhone"),
+    bookedByEmail: inputValue(root, "bookedContEmail"),
+    passengerName: [first, last].filter(Boolean).join(" ") || void 0,
+    passengerPhone: inputValue(root, "passPhone"),
+    passengerEmail: inputValue(root, "passEmail"),
+    groupName: inputValue(root, "tripGroupName"),
+    occasion: inputValue(root, "tripOcassion"),
+    clientRef: inputValue(root, "tripRefNumber"),
+    voucherNumber: inputValue(root, "tripVoucherNumber"),
+    puDate: inputValue(root, "tripPUDate"),
+    puTime: inputValue(root, "tripPUTime"),
+    doTime: inputValue(root, "tripDOTime"),
+    spotTime: inputValue(root, "tripSpotTime"),
+    durationHours: inputValue(root, "tripDuration"),
+    paxCount: inputValue(root, "tripPaxNumber"),
+    luggageCount: inputValue(root, "tripLuggageCount"),
+    serviceType: selectedOption(root, "svcCodeList"),
+    vehicleType: inputValue(root, "tripVehType"),
+    vehicleDisplay: selectedOption(root, "tripVehTypeList"),
+    routing: void 0,
+    panel: {
+      idCont: inputValue(root, "idCont") || "0",
+      idPass: inputValue(root, "idPass") || "0",
+      editLocked: pageEditLocked(html)
+    },
+    tripNotes: textareaValue(root, "newNotes"),
+    dispatchNotes: textareaValue(root, "tripDispatchNotes"),
+    partnerNotes: textareaValue(root, "tripPartnerNotes"),
+    paymentType: selectedOption(root, "tripPayType"),
+    currency: selectedOption(root, "tripCurrency"),
+    grandTotal,
+    paymentsDeposits,
+    totalDue,
+    driver: selectedOption(root, "idDriver"),
+    secondDriver: selectedOption(root, "idDriver2"),
+    car: selectedOption(root, "carList"),
+    rentalAgreement: selectedOption(root, "tripRentalAgrType")
+  };
 }
 
 // dist/la/rateTotals.js
@@ -27003,6 +27167,274 @@ function rateTotalsIfSet(fields, flatRate) {
   return flatRate === void 0 ? fields : withFlatRate(fields, flatRate);
 }
 
+// dist/la/parseLists.js
+function parseQuoteRows(html) {
+  const root = parseLaHtml(html);
+  const rows = [];
+  for (const tr of root.querySelectorAll("tr")) {
+    const cells = tr.querySelectorAll("td.custListRow");
+    if (cells.length < 8)
+      continue;
+    const refNumber = cleanText(cells[0].text);
+    if (!/^\d{3,8}$/.test(refNumber))
+      continue;
+    const puDate = cleanText(cells[1].text);
+    const puTime = cleanText(cells[2].text);
+    const requestedText = cleanText(cells[7].text);
+    rows.push({
+      refNumber,
+      idQuote: tr.innerHTML.match(/menu(\d{5,})/)?.[1],
+      puDate,
+      puTime,
+      puAt: parseLaDate(puDate, puTime),
+      passenger: cleanText(cells[3].text).replace(/^,\s*/, ""),
+      vehicleType: cleanText(cells[4].text),
+      amount: parseMoney(cells[5].text),
+      phone: cleanText(cells[6].text),
+      requestedAt: parseLaDateTime(requestedText),
+      requestedText,
+      isNew: /font-weight:\s*bold/i.test(cells[0].getAttribute("style") ?? "")
+    });
+  }
+  return rows;
+}
+function parseReservationRows(html) {
+  const root = parseLaHtml(html);
+  const rows = [];
+  for (const tr of root.querySelectorAll("tr")) {
+    const cells = tr.querySelectorAll("td.custListRow");
+    if (cells.length < 9)
+      continue;
+    const confNumber = cleanText(cells[0].text);
+    if (!/^\d{3,8}$/.test(confNumber))
+      continue;
+    const link = tr.querySelector('a[href*="showResForm"]')?.getAttribute("href") ?? "";
+    const puDate = cleanText(cells[1].text);
+    const puTime = cleanText(cells[2].text);
+    const company = cleanText(cells[4].text);
+    const group = cells.length > 9 ? cleanText(cells[9].text) : "";
+    rows.push({
+      confNumber,
+      idTrip: link.match(/idTrip=(\d+)/)?.[1],
+      tripCode: link.match(/tripCode=([^&"]*)/)?.[1] || void 0,
+      puDate,
+      puTime,
+      puAt: parseLaDate(puDate, puTime),
+      passenger: cleanText(cells[3].text).replace(/^,\s*/, ""),
+      company: company === "N/A" ? void 0 : company || void 0,
+      vehicleType: cleanText(cells[5].text),
+      total: parseMoney(cells[6].text),
+      paymentType: cleanText(cells[7].text),
+      statusOrSubmitted: cleanText(cells[8].text),
+      groupName: group || void 0
+    });
+  }
+  return rows;
+}
+
+// dist/la/routing.js
+var STOP_TYPES = /* @__PURE__ */ new Set(["PU", "DO", "ST", "WT"]);
+function parseRoutingStops(html) {
+  const fragment = formFragment(html, "frmTripRtEdit");
+  const list = fragment ? parseLaHtml(fragment).querySelector("ul#myRoute") : null;
+  if (!list)
+    throw new Error("LimoAnywhere's reservation page has no routing section \u2014 the screen may have changed.");
+  return list.querySelectorAll("li").flatMap((li) => {
+    const idTripRt = li.querySelector("input[type=hidden]")?.getAttribute("value") ?? "";
+    if (!idTripRt)
+      return [];
+    const type = (li.getAttribute("class") ?? "").split(/\s+/).find((c) => STOP_TYPES.has(c));
+    const text = cleanText(li.querySelector(".textRoute")?.text);
+    if (!type || !/^\d+$/.test(idTripRt)) {
+      throw new Error(`Otto couldn't read one of this trip's stops (${text || idTripRt}), so it won't change the route. Change it in LimoAnywhere directly.`);
+    }
+    return [{ idTripRt, type, location: li.getAttribute("triprtloc") ?? "", text }];
+  });
+}
+function timeInForDialog(raw) {
+  const m = typeof raw === "string" ? raw.match(/(\d{1,2}):(\d{2})/) : null;
+  if (!m)
+    return "";
+  const h = Number(m[1]);
+  if (h > 23)
+    return "";
+  return `${String(h % 12 === 0 ? 12 : h % 12).padStart(2, "0")}:${m[2]} ${h >= 12 ? "PM" : "AM"}`;
+}
+function parseEditRoute(text, idTripRt) {
+  let route;
+  try {
+    route = JSON.parse(JSON.parse(text)[0].route)[0];
+  } catch {
+    route = void 0;
+  }
+  if (!route || typeof route !== "object") {
+    throw new Error("Otto couldn't read the stop's current details from LimoAnywhere, so it didn't change it.");
+  }
+  if (String(route.idTripRt) !== idTripRt) {
+    throw new Error(`LimoAnywhere answered with a different stop (${String(route.idTripRt)}) than the one being changed (${idTripRt}); nothing was changed.`);
+  }
+  const out = {};
+  for (const [k, v] of Object.entries(route))
+    out[k] = v === null || v === void 0 ? "" : String(v);
+  out.tripRtTimeIn = timeInForDialog(route.tripRtTimeIn);
+  return out;
+}
+var TYPE_WORD = { PU: "pickup", DO: "drop-off", ST: "stop", WT: "wait" };
+function planStopChanges(existing, req) {
+  const changes = [];
+  for (const [type, stop] of [["PU", req.pickup], ["DO", req.dropoff]]) {
+    if (!stop)
+      continue;
+    const matches2 = existing.filter((s) => s.type === type);
+    if (matches2.length > 1) {
+      return {
+        problem: `This reservation has ${matches2.length} ${TYPE_WORD[type]}s (${matches2.map((s) => s.text).join("; ")}), so I can't tell which one to change. Change it in LimoAnywhere directly.`
+      };
+    }
+    const [current] = matches2;
+    if (current && current.location !== "ADDR") {
+      return {
+        problem: `The ${TYPE_WORD[type]} on this reservation is an airport/seaport/FBO stop (${current.text}); Otto only edits street-address stops, so its flight details aren't lost. Change it in LimoAnywhere directly.`
+      };
+    }
+    changes.push(current ? { op: "edit", idTripRt: current.idTripRt, type, stop, was: current.text } : { op: "add", type, stop });
+  }
+  if (req.addStop)
+    changes.push({ op: "add", type: "ST", stop: req.addStop });
+  return { changes };
+}
+function routeOrder(existing, changes, addedIds) {
+  const adds = changes.filter((c) => c.op === "add");
+  if (adds.length !== addedIds.length) {
+    throw new Error(`routeOrder: ${adds.length} added stop(s) but ${addedIds.length} ids`);
+  }
+  const added = adds.map((c, i) => ({ type: c.type, id: addedIds[i] }));
+  const ids = (type) => added.filter((a) => a.type === type).map((a) => a.id);
+  const current = existing.map((s) => s.idTripRt);
+  const firstDropoff = existing.findIndex((s) => s.type === "DO");
+  const cut = firstDropoff === -1 ? current.length : firstDropoff;
+  return [
+    ...ids("PU"),
+    ...current.slice(0, cut),
+    ...ids("ST"),
+    ...ids("WT"),
+    ...current.slice(cut),
+    ...ids("DO")
+  ];
+}
+function routingStopBody(trip, type, stop, opts = {}) {
+  const kept = (k, fallback = "") => opts.existing?.[k] ?? fallback;
+  return {
+    action: "addAddr",
+    idTripRt: opts.idTripRt ?? "",
+    idTrip: trip.idTrip,
+    tripCode: trip.tripCode,
+    tripRtLocation: "ADDR",
+    tripRtType: type,
+    tripRtPos: type === "PU" ? "1" : type === "DO" ? "99" : "2",
+    tripRtTimeIn: kept("tripRtTimeIn"),
+    tripRtName: stop.label ?? "",
+    tripRtAddr1: stop.address,
+    // Suite/floor and county belong to the old address; the pin is the new one's.
+    tripRtAddr2: "",
+    tripRtCity: stop.city,
+    tripRtState: stop.state.toUpperCase(),
+    tripRtZip: stop.zip ?? "",
+    tripRtCountry: kept("tripRtCountry", "US") || "US",
+    tripRtPhone: kept("tripRtPhone"),
+    tripRtNotes: kept("tripRtNotes"),
+    tripRtSpecialInstr: kept("tripRtSpecialInstr"),
+    tripRtMisc1: kept("tripRtMisc1"),
+    tripRtMisc2: kept("tripRtMisc2"),
+    tripRtMisc3: kept("tripRtMisc3"),
+    tripRtMisc4: kept("tripRtMisc4"),
+    tripRtLng: stop.lng ?? "",
+    tripRtLat: stop.lat ?? "",
+    idCont: opts.idCont ?? "0",
+    tripRtCounty: "",
+    tripTimeZone: opts.timeZone ?? "",
+    tripPUDate: opts.puDate ?? ""
+  };
+}
+
+// dist/la/reservations.js
+var RESERVATION_TABS = {
+  new: { stab: "newRes", action: "showResList1", label: "New Reservations" },
+  online: { stab: "onlineFarmin", action: "showEResList", label: "Online & eFarm-in" },
+  unfinalized: { stab: "unfinalizedRes", action: "showUnfList", label: "Unfinalized" },
+  deleted: { stab: "deletedRes", action: "showDeleted", label: "Deleted" }
+};
+async function fetchReservationRows(creds, query = {}) {
+  const tab = RESERVATION_TABS[query.tab ?? "new"];
+  const rows = [];
+  let page2 = 1;
+  for (; page2 <= MAX_LIST_PAGES; page2++) {
+    const html = await laFetch(creds, "/admin/manageRes.asp", {
+      query: {
+        stab: tab.stab,
+        action: tab.action,
+        searchFor: query.searchFor ?? "",
+        searchIn: query.searchIn ?? "",
+        dateFrom: query.dateFrom ? laDate(query.dateFrom) : "",
+        dateTo: query.dateTo ? laDate(query.dateTo) : "",
+        sortBy: query.sortBy ?? "tripPUDate",
+        sortOrder: query.sortOrder ?? "ASC",
+        pagesize: LIST_PAGE_SIZE,
+        pNum: page2
+      }
+    });
+    const pageRows = parseReservationRows(html);
+    rows.push(...pageRows);
+    if (pageRows.length < LIST_PAGE_SIZE)
+      return { rows, pagesFetched: page2, truncated: false };
+  }
+  return { rows, pagesFetched: page2 - 1, truncated: true };
+}
+async function fetchReservationDetail(creds, idTrip, tripCode) {
+  const html = await laFetch(creds, "/admin/manageRes.asp", {
+    query: { action: "showResForm", idTrip, tripCode: tripCode ?? "" }
+  });
+  const detail = parseReservationDetail(html);
+  if (!tripCode)
+    return detail;
+  try {
+    const stops = await fetchRoutingStops(creds, { idTrip, tripCode, ...detail.panel });
+    return { ...detail, routing: stops.map((s) => s.text) };
+  } catch {
+    return detail;
+  }
+}
+async function fetchRoutingStops(creds, trip) {
+  const html = await laFetch(creds, "/admin/forms/form_IFRAME_routing.asp", {
+    method: "POST",
+    form: {},
+    query: {
+      idCont: trip.idCont,
+      idPass: trip.idPass,
+      idTrip: trip.idTrip,
+      tripCode: trip.tripCode,
+      isArchive: "0",
+      tab: "ADDR",
+      canEditRes: String(!trip.editLocked),
+      isReservationSettled: "false"
+    }
+  });
+  return parseRoutingStops(html);
+}
+async function findReservationByConf(creds, confNumber) {
+  for (const tab of Object.keys(RESERVATION_TABS)) {
+    const { rows } = await fetchReservationRows(creds, {
+      tab,
+      searchFor: confNumber,
+      searchIn: "tripConfNumber"
+    });
+    const row = rows.find((r) => r.confNumber === confNumber);
+    if (row)
+      return { row, tab };
+  }
+  return void 0;
+}
+
 // dist/la/writeInputs.js
 var WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 function normalizeLaDate(input) {
@@ -27063,19 +27495,38 @@ function normalizeMoney(input) {
 function describeStop(s) {
   return [s.label, s.address, `${s.city}, ${s.state.toUpperCase()}${s.zip ? ` ${s.zip}` : ""}`].filter(Boolean).join(", ");
 }
+function describePinnedStop(s) {
+  return `${describeStop(s)}${s.found ? ` (map: ${s.found})` : ""}`;
+}
 
 // dist/la/writeClient.js
 var LA_WRITE_ALLOWLIST = {
-  // Allocates a blank reservation (id, code and Conf #) — the first step of a create.
-  "/admin/manageRes.asp": { queryAction: /* @__PURE__ */ new Set(["startRes"]), method: "GET" },
-  // Saves the full reservation form (create and edit alike).
-  "/admin/forms/form_handler_reservation.asp": { queryAction: /* @__PURE__ */ new Set(["saveRes"]), method: "POST" },
+  // Allocates a blank reservation (id, code and Conf #) — the first step of a
+  // create. The New menu's "Quote" item is the same call with isQuote=true
+  // (captured 2026-09-28): the trip is born a quote (tripResStatus=QUOTE).
+  "/admin/manageRes.asp": { queryAction: /* @__PURE__ */ new Set(["startRes"]), method: "GET", query: { isQuote: /* @__PURE__ */ new Set(["true"]) } },
+  // Saves the full reservation form (create and edit alike; quotes too).
+  "/admin/forms/form_handler_reservation.asp": {
+    queryAction: /* @__PURE__ */ new Set(["saveRes"]),
+    method: "POST",
+    query: { status: /* @__PURE__ */ new Set(["new", "exst"]), modal: /* @__PURE__ */ new Set([""]) }
+  },
   // Adds/orders routing stops on a trip.
-  "/admin/_forms/form_handler_routing.asp": { formAction: /* @__PURE__ */ new Set(["addAddr", "sortRoute"]), method: "POST" },
+  "/admin/_forms/form_handler_routing.asp": { formAction: /* @__PURE__ */ new Set(["addAddr", "sortRoute"]), method: "POST", query: {} },
+  // Converts a quote in place, exactly as Manage Quotes' "Convert to:" links
+  // do (captured 2026-09-28): type=live -> New Reservations, type=unf ->
+  // Unfinalized. One GET is the whole write. Delete/batch-delete on the same
+  // screen stay refused (not listed).
+  "/admin/manageQuotes.asp": {
+    queryAction: /* @__PURE__ */ new Set(["convert"]),
+    method: "GET",
+    query: { type: /* @__PURE__ */ new Set(["live", "unf"]), idQuote: /^\d{5,}$/, tripCode: /^[A-Za-z0-9]*$/ }
+  },
   // Trip notes and dispatch notes.
   "/admin/_forms/form_handler_notes.asp": {
     formAction: /* @__PURE__ */ new Set(["addNotes", "updateTripDispatchNotes"]),
-    method: "POST"
+    method: "POST",
+    query: {}
   }
 };
 function formValue(form, key) {
@@ -27093,12 +27544,24 @@ function assertWriteAllowed(url, opts) {
   };
   if (!rule)
     refuse(`"${url.pathname}" isn't a supported write handler`);
+  if (opts.json !== void 0)
+    refuse(`${url.pathname} is never written with a JSON body`);
   const method = opts.method ?? "GET";
   if (method !== rule.method)
     refuse(`${method} isn't allowed for ${url.pathname}`);
   const action = url.searchParams.get("action");
+  if (url.searchParams.getAll("action").length > 1)
+    refuse(`a write names exactly one action`);
   if (rule.queryAction && (!action || !rule.queryAction.has(action))) {
     refuse(`action "${action ?? "(none)"}" isn't a supported write for ${url.pathname}`);
+  }
+  for (const [key, value] of url.searchParams) {
+    if (key === "action" && rule.queryAction)
+      continue;
+    const allowed = rule.query?.[key];
+    const ok = allowed instanceof RegExp ? allowed.test(value) : Boolean(allowed?.has(value));
+    if (!ok)
+      refuse(`query ${key}=${value} isn't part of a supported write to ${url.pathname}`);
   }
   const formAction2 = formValue(opts.form, "action");
   if (rule.formAction && (!formAction2 || !rule.formAction.has(formAction2))) {
@@ -27113,6 +27576,10 @@ async function laWrite(creds, path6, opts = {}) {
 
 // dist/la/reservationWrites.js
 var RES_FORM = "frmAddRes";
+function parseConfNumber(html) {
+  const bare = html.replace(/<script\b[\s\S]*?<\/script\s*>/gi, "");
+  return bare.match(/name=["']tripConfNumberPrefix["'][^>]*>\s*<input\b[^>]*\bvalue=["'](\d{3,8})["']/i)?.[1] ?? bare.match(/showDispatchLog\(\s*\d+\s*,\s*(\d{3,8})\s*\)/)?.[1];
+}
 function parseReservationForm(html) {
   const fields = serializeForm(html, RES_FORM);
   const idTrip = fieldValue(fields, "idTrip");
@@ -27125,11 +27592,18 @@ function parseReservationForm(html) {
   return {
     idTrip,
     tripCode,
-    confNumber: html.match(/Conf#[\s\S]{0,400}?(\d{3,8})\s*</)?.[1],
+    confNumber: parseConfNumber(html),
     unsaved: /has not been saved/i.test(html),
     fields,
     savePath: savePath.pathname + savePath.search,
-    options: (select) => selectOptions(html, RES_FORM, select)
+    options: (select) => selectOptions(html, RES_FORM, select),
+    // Set by the page's own script; routing.js refuses to edit stops when
+    // either holds, and so does Otto.
+    editLocked: pageEditLocked(html),
+    // Read by id: the live input's name is "selectedTripTimeZone " (trailing space).
+    timeZone: html.match(/id=["']selectedTripTimeZone["'][^>]*?value=["']([^"']*)["']/i)?.[1] || void 0,
+    isQuote: fieldValue(fields, "tripResStatus") === "QUOTE",
+    resStatus: fieldValue(fields, "tripResStatus")
   };
 }
 async function loadReservationForm(creds, idTrip, tripCode) {
@@ -27138,8 +27612,25 @@ async function loadReservationForm(creds, idTrip, tripCode) {
   });
   return parseReservationForm(html);
 }
-async function startReservation(creds) {
-  const res = await laWrite(creds, "/admin/manageRes.asp", { query: { action: "startRes" } });
+function loadRoutingStops(creds, form) {
+  return fetchRoutingStops(creds, {
+    idTrip: form.idTrip,
+    tripCode: form.tripCode,
+    idCont: fieldValue(form.fields, "idCont") ?? "0",
+    idPass: fieldValue(form.fields, "idPass") ?? "0",
+    editLocked: form.editLocked
+  });
+}
+async function loadStopDetails(creds, idTrip, idTripRt) {
+  const text = await laFetch(creds, "/admin/_forms/form_handler_routing.asp", {
+    method: "POST",
+    form: { action: "editRoute", idtriproute: idTripRt, idTrip, isArchive: "0" }
+  });
+  return parseEditRoute(text, idTripRt);
+}
+async function startReservation(creds, opts = {}) {
+  const query = { action: "startRes", ...opts.quote ? { isQuote: "true" } : {} };
+  const res = await laWrite(creds, "/admin/manageRes.asp", { query });
   const target = res.location ? new URL(res.location, `${LA_BASE}/admin/`) : void 0;
   const idTrip = target?.searchParams.get("idTrip") ?? void 0;
   const tripCode = target?.searchParams.get("tripCode") ?? void 0;
@@ -27160,43 +27651,18 @@ var DraftAllocatedError = class extends Error {
     this.cause = cause;
   }
 };
-async function addRoutingStop(creds, trip, type, stop) {
-  const body = {
-    action: "addAddr",
-    idTripRt: "",
-    idTrip: trip.idTrip,
-    tripCode: trip.tripCode,
-    tripRtLocation: "ADDR",
-    tripRtType: type,
-    tripRtPos: type === "PU" ? "1" : type === "DO" ? "99" : "2",
-    tripRtTimeIn: "",
-    tripRtName: stop.label ?? "",
-    tripRtAddr1: stop.address,
-    tripRtAddr2: "",
-    tripRtCity: stop.city,
-    tripRtState: stop.state.toUpperCase(),
-    tripRtZip: stop.zip ?? "",
-    tripRtCountry: "US",
-    tripRtPhone: "",
-    tripRtNotes: "",
-    tripRtSpecialInstr: "",
-    tripRtMisc1: "",
-    tripRtMisc2: "",
-    tripRtMisc3: "",
-    tripRtMisc4: "",
-    tripRtLng: "",
-    tripRtLat: "",
-    idCont: "0",
-    tripRtCounty: "",
-    tripTimeZone: "",
-    tripPUDate: ""
-  };
-  const res = await laWrite(creds, "/admin/_forms/form_handler_routing.asp", { method: "POST", form: body });
+async function saveRoutingStop(creds, trip, type, stop, opts = {}) {
+  const path6 = "/admin/_forms/form_handler_routing.asp";
+  const idTripRt = opts.idTripRt;
+  const res = await laWrite(creds, path6, { method: "POST", form: routingStopBody(trip, type, stop, opts) });
   const id = res.text.trim().split(",").pop()?.trim();
   if (!id || !/^\d+$/.test(id)) {
-    throw new LaError(502, res.text, "/admin/_forms/form_handler_routing.asp", "LimoAnywhere didn't confirm the routing stop was added.");
+    throw new LaError(502, res.text, path6, `LimoAnywhere didn't confirm the routing stop was ${idTripRt ? "changed" : "added"}.`);
   }
   return id;
+}
+function addRoutingStop(creds, trip, type, stop) {
+  return saveRoutingStop(creds, trip, type, stop);
 }
 async function sortRoutingStops(creds, idTrip, stopIds) {
   await laWrite(creds, "/admin/_forms/form_handler_routing.asp", {
@@ -27279,6 +27745,11 @@ async function saveReservation(creds, form, changes, flatRate) {
   }
   return saved;
 }
+async function convertQuote(creds, trip, to) {
+  await laWrite(creds, "/admin/manageQuotes.asp", {
+    query: { action: "convert", type: to, idQuote: trip.idTrip, ...to === "live" ? { tripCode: trip.tripCode } : {} }
+  });
+}
 function escapeNote(text) {
   return text.replace(/"/g, "&#34;").replace(/'/g, "&#39;").replace(/\\/g, "&#92;");
 }
@@ -27310,54 +27781,17 @@ async function postNote(creds, form) {
   }
 }
 
-// dist/la/statusCodes.js
-var LA_STATUS_LABELS = {
-  Wting: "Additional Waiting Time",
-  ARR: "Arrived",
-  ASN: "Assigned",
-  CXL: "Cancelled",
-  CXLAF: "Cancelled by Affiliate",
-  CIRCL: "Circling",
-  CCC: "Contract Pending",
-  CVRCXL: "COVID-19 Cancellation",
-  CIC: "Customer In Car",
-  DSP: "Dispatched",
-  DON: "Done",
-  FOA: "Farm-out Assigned",
-  FOU: "Farm-out Unassigned",
-  FTC: "Flight Time Change",
-  GSN: "Get Status Now!",
-  LCX: "Late Cancel",
-  NSH: "No Show",
-  OFR: "Offered",
-  OLC: "On Location",
-  OTW: "On The Way",
-  TMP: "Online and eFarm In",
-  PND: "Pending",
-  UNA: "Unassigned",
-  LST: "Waiting List"
-};
-var LA_DEAD_STATUSES = /* @__PURE__ */ new Set([
-  "Cancelled",
-  "Cancelled by Affiliate",
-  "COVID-19 Cancellation",
-  "No Show"
-]);
-function statusLabel(code) {
-  if (!code)
-    return void 0;
-  return LA_STATUS_LABELS[code] ?? code;
-}
-
 // dist/la/writeActions.js
 function actionHeadline(action) {
   switch (action.kind) {
     case "create_reservation":
-      return "Create a new reservation";
+      return action.quote ? "Create a new quote" : "Create a new reservation";
     case "update_reservation":
       return `Update reservation #${action.confNumber}`;
     case "add_note":
       return `Add a ${action.target === "dispatch" ? "dispatch" : "trip"} note to reservation #${action.confNumber}`;
+    case "convert_quote":
+      return `Convert quote Ref #${action.refNumber} to ${action.to === "live" ? "a live reservation" : "an unfinalized reservation"}`;
   }
 }
 async function executeAction(creds, action) {
@@ -27368,22 +27802,33 @@ async function executeAction(creds, action) {
       return executeUpdate(creds, action);
     case "add_note":
       return executeNote(creds, action);
+    case "convert_quote":
+      return executeConvert(creds, action);
   }
 }
 var plain = (err) => err instanceof LaError ? err.friendly() : err.message;
 async function executeCreate(creds, action) {
+  const quote = action.quote === true;
+  const what = quote ? "quote" : "reservation";
   let draft;
   try {
-    draft = await startReservation(creds);
+    draft = await startReservation(creds, { quote });
   } catch (err) {
     if (err instanceof DraftAllocatedError) {
       return {
+        outcome: "partial",
         text: `LimoAnywhere allocated a blank reservation${err.idTrip ? ` (trip id ${err.idTrip})` : ""} but Otto couldn't open it to fill it in: ${plain(err.cause)} It will show in LimoAnywhere as an unsaved draft \u2014 open it there to complete or delete it. This token is spent; prepare again to retry.`
       };
     }
     throw err;
   }
   const conf = draft.confNumber ? `#${draft.confNumber}` : `trip id ${draft.idTrip}`;
+  if (draft.isQuote !== quote) {
+    return {
+      outcome: "partial",
+      text: `LimoAnywhere allocated ${conf} but opened it as a ${draft.isQuote ? "quote" : "reservation"}, not the ${what} that was prepared, so Otto stopped before filling it in. It will show in LimoAnywhere as an unsaved draft \u2014 delete it there. This token is spent.`
+    };
+  }
   try {
     const stopIds = [await addRoutingStop(creds, draft, "PU", action.pickup)];
     if (action.dropoff)
@@ -27392,36 +27837,163 @@ async function executeCreate(creds, action) {
       await sortRoutingStops(creds, draft.idTrip, stopIds);
     const form = await loadReservationForm(creds, draft.idTrip, draft.tripCode);
     const saved = await saveReservation(creds, form, action.fieldChanges, action.flatRate);
+    if (saved.isQuote !== quote) {
+      return {
+        outcome: "partial",
+        text: `LimoAnywhere saved ${conf}, but as a ${saved.isQuote ? "quote" : "reservation"}, not the ${what} that was prepared. Open it in LimoAnywhere and fix or delete it. This token is spent.`
+      };
+    }
     const lines = [
-      `Created reservation **${saved.confNumber ? `#${saved.confNumber}` : conf}** in LimoAnywhere.`,
+      quote ? `Created quote **Ref #${saved.confNumber ?? draft.confNumber ?? "?"}** in LimoAnywhere \u2014 it's on the Manage Quotes screen.` : `Created reservation **${saved.confNumber ? `#${saved.confNumber}` : conf}** in LimoAnywhere.`,
       ...action.summary.map((s) => `- ${s}`),
-      `- Status: ${statusLabel(fieldValue(saved.fields, "tripStatusOld")) ?? "Unassigned"}`,
-      `- Grand total on the form: $${fieldValue(saved.fields, "GrandTot") ?? "0.00"}`,
+      ...quote ? [] : [`- Status: ${statusLabel(fieldValue(saved.fields, "tripStatusOld")) ?? "Unassigned"}`],
+      `- ${quote ? "Quoted total" : "Grand total"} on the form: $${fieldValue(saved.fields, "GrandTot") ?? "0.00"}`,
       "",
-      `No confirmation email was sent (LimoAnywhere's send options were left at "Do Not Send"). Open the reservation in LimoAnywhere to add payment details or send the confirmation.`
+      quote ? "Nothing was sent to the customer. Respond to or convert the quote in LimoAnywhere when it's ready." : `No confirmation email was sent (LimoAnywhere's send options were left at "Do Not Send"). Open the reservation in LimoAnywhere to add payment details or send the confirmation.`
     ];
     return { text: lines.join("\n") };
   } catch (err) {
     return {
-      text: `LimoAnywhere allocated reservation ${conf} but the save didn't finish: ${plain(err)} It will show as an unsaved draft in LimoAnywhere \u2014 open it there to complete or delete it. This token is spent; prepare again to retry.`
+      outcome: "partial",
+      text: `LimoAnywhere allocated ${what} ${conf} but the save didn't finish: ${plain(err)} It will show as an unsaved draft in LimoAnywhere \u2014 open it there to complete or delete it. This token is spent; prepare again to retry.`
     };
   }
 }
 async function executeUpdate(creds, action) {
+  const stopChanges = action.stopChanges ?? [];
   const form = await loadReservationForm(creds, action.idTrip, action.tripCode);
-  const saved = await saveReservation(creds, form, action.fieldChanges, action.flatRate);
+  if (form.editLocked) {
+    return {
+      outcome: "refused",
+      text: `Reservation #${action.confNumber} is now settled or locked for editing in LimoAnywhere, so nothing was changed.`
+    };
+  }
+  const lines = [`Updated reservation **#${action.confNumber}** in LimoAnywhere.`, ...action.summary.map((s) => `- ${s}`)];
+  let routeNotes = [];
+  if (stopChanges.length > 0) {
+    const routed = await applyStopChanges(creds, action, form, stopChanges);
+    if (!routed.ok)
+      return routed.result;
+    routeNotes = routed.notes;
+    lines.push(...routeNotes);
+  }
+  const hasFieldChanges = Object.keys(action.fieldChanges).length > 0 || action.flatRate !== void 0;
+  if (!hasFieldChanges)
+    return { text: lines.join("\n") };
+  let saved;
+  try {
+    const current = stopChanges.length > 0 ? await loadReservationForm(creds, action.idTrip, action.tripCode) : form;
+    saved = await saveReservation(creds, current, action.fieldChanges, action.flatRate);
+  } catch (err) {
+    if (stopChanges.length === 0)
+      throw err;
+    return {
+      outcome: "partial",
+      text: `The route on reservation **#${action.confNumber}** was changed, but the other changes didn't save: ${plain(err)}
+${routeNotes.join("\n")}
+
+Open the reservation in LimoAnywhere to check it. This token is spent; prepare again for the remaining changes.`
+    };
+  }
   const kept = Object.entries(action.fieldChanges).filter(([k, v]) => {
     const now = fieldValue(saved.fields, k === "tripStatus" ? "tripStatusOld" : k);
     return now !== void 0 && now !== v;
   });
-  const lines = [
-    `Updated reservation **#${action.confNumber}** in LimoAnywhere.`,
-    ...action.summary.map((s) => `- ${s}`),
-    `- Status now: ${statusLabel(fieldValue(saved.fields, "tripStatusOld")) ?? "\u2014"} \xB7 Grand total on the form: $${fieldValue(saved.fields, "GrandTot") ?? "\u2014"}`
-  ];
+  lines.push(`- Status now: ${statusLabel(fieldValue(saved.fields, "tripStatusOld")) ?? "\u2014"} \xB7 Grand total on the form: $${fieldValue(saved.fields, "GrandTot") ?? "\u2014"}`);
   if (kept.length > 0) {
     lines.push("", `LimoAnywhere kept a different value for: ${kept.map(([k]) => k).join(", ")} \u2014 open the reservation to check.`);
   }
+  return { text: lines.join("\n") };
+}
+var routeKey = (stops) => JSON.stringify(stops.map((s) => [s.idTripRt, s.type, s.text]));
+async function describeRouteNow(creds, form) {
+  try {
+    const stops = await loadRoutingStops(creds, form);
+    return `Route in LimoAnywhere now: ${stops.map((s) => s.text).join(" \u2192 ") || "no stops"}`;
+  } catch {
+    return "Otto couldn't read the route back \u2014 check it in LimoAnywhere.";
+  }
+}
+async function applyStopChanges(creds, action, form, changes) {
+  const refused = (text) => ({ ok: false, result: { outcome: "refused", text } });
+  const current = await loadRoutingStops(creds, form);
+  if (!action.routeBefore || routeKey(current) !== routeKey(action.routeBefore)) {
+    return refused(`The route on reservation #${action.confNumber} changed in LimoAnywhere after this was prepared, so nothing was changed. Prepare again to see the current stops.`);
+  }
+  const trip = { idTrip: action.idTrip, tripCode: action.tripCode };
+  const context = { timeZone: form.timeZone, puDate: fieldValue(form.fields, "tripPUDate"), idCont: fieldValue(form.fields, "idCont") };
+  const addedIds = [];
+  const done = [];
+  let wrote = false;
+  try {
+    for (const change of changes) {
+      if (change.op === "edit" && !change.stop.lat) {
+        throw new Error(`the new ${change.type} address has no map pin (prepared by an older Otto) \u2014 prepare the change again`);
+      }
+      const edit = change.op === "edit" ? { idTripRt: change.idTripRt, existing: await loadStopDetails(creds, action.idTrip, change.idTripRt) } : {};
+      if (edit.existing && edit.existing.tripRtLocation !== "ADDR") {
+        throw new Error(`the ${change.type} stop is no longer a street address in LimoAnywhere`);
+      }
+      wrote = true;
+      const id = await saveRoutingStop(creds, trip, change.type, change.stop, { ...context, ...edit });
+      if (change.op === "add")
+        addedIds.push(id);
+      done.push(`${change.op === "edit" ? "changed" : "added"} the ${change.type} stop`);
+    }
+    if (addedIds.length > 0) {
+      wrote = true;
+      await sortRoutingStops(creds, action.idTrip, routeOrder(current, changes, addedIds));
+      done.push("re-ordered the stops");
+    }
+  } catch (err) {
+    if (!wrote)
+      return refused(`Otto didn't change the route on reservation #${action.confNumber}: ${plain(err)} Nothing was changed.`);
+    return {
+      ok: false,
+      result: {
+        outcome: "partial",
+        text: `Changing the route on reservation #${action.confNumber} stopped partway: ${plain(err)} ${done.length > 0 ? `Already done: ${done.join(", ")}.` : "LimoAnywhere may or may not have applied the first change."}
+
+${await describeRouteNow(creds, form)}
+
+This token is spent; check the route in LimoAnywhere before preparing again.`
+      }
+    };
+  }
+  return { ok: true, notes: [`- ${await describeRouteNow(creds, form)}`] };
+}
+var CONVERTED_STATUS = { live: "NEW", unf: "UNF" };
+async function executeConvert(creds, action) {
+  const ref = `Ref #${action.refNumber}`;
+  const before = await loadReservationForm(creds, action.idTrip, action.tripCode);
+  if (before.confNumber !== action.refNumber) {
+    return {
+      outcome: "refused",
+      text: `The record Otto opened is ${before.confNumber ? `#${before.confNumber}` : "unnumbered"}, not quote ${ref}, so nothing was changed.`
+    };
+  }
+  if (!before.isQuote) {
+    return {
+      outcome: "refused",
+      text: `${ref} is no longer a quote in LimoAnywhere (it's ${before.resStatus ?? "something else"} now \u2014 it may have been converted already), so nothing was changed.`
+    };
+  }
+  await convertQuote(creds, { idTrip: action.idTrip, tripCode: before.tripCode }, action.to);
+  const after = await loadReservationForm(creds, action.idTrip, action.tripCode);
+  const wanted = CONVERTED_STATUS[action.to];
+  if (after.resStatus !== wanted) {
+    return {
+      outcome: after.isQuote ? "refused" : "partial",
+      text: after.isQuote ? `LimoAnywhere answered but ${ref} is still a quote \u2014 nothing was converted. Try converting it in LimoAnywhere directly.` : `LimoAnywhere changed ${ref}, but it's now "${after.resStatus ?? "?"}", not the ${action.to === "live" ? "live" : "unfinalized"} reservation that was asked for. Open it in LimoAnywhere to check.`
+    };
+  }
+  const lines = [
+    action.to === "live" ? `Converted quote ${ref} to live reservation **#${after.confNumber ?? action.refNumber}** \u2014 it's on New Reservations now.` : `Converted quote ${ref} to an **unfinalized** reservation **#${after.confNumber ?? action.refNumber}** \u2014 it's on the Unfinalized tab; finalize it in LimoAnywhere when it's confirmed.`,
+    ...action.summary.map((s) => `- ${s}`),
+    `- Total on the reservation: $${fieldValue(after.fields, "GrandTot") ?? "\u2014"}`,
+    "",
+    "Otto sent nothing itself (the preview showed LimoAnywhere's own send settings for this trip). The Conf # is the quote's Ref #."
+  ];
   return { text: lines.join("\n") };
 }
 async function executeNote(creds, action) {
@@ -27445,9 +28017,9 @@ function renderPreview(action, token, ttlMinutes) {
     ...action.summary.map((s) => `- ${s}`)
   ];
   if (action.kind === "create_reservation") {
-    lines.push(`- Pickup: ${describeStop(action.pickup)}`);
+    lines.push(`- Pickup: ${describePinnedStop(action.pickup)}`);
     if (action.dropoff)
-      lines.push(`- Drop-off: ${describeStop(action.dropoff)}`);
+      lines.push(`- Drop-off: ${describePinnedStop(action.dropoff)}`);
     lines.push('- Confirmation email: not sent (left at "Do Not Send")');
   }
   lines.push("", `**Nothing has been changed yet.** Show this to the operator and ask them to confirm. If they say yes, call la_confirm_action with token \`${token}\` (valid ${ttlMinutes} minutes, one use). If they want something different, prepare again instead of confirming.`);
@@ -27458,7 +28030,7 @@ function renderPreview(action, token, ttlMinutes) {
 var laConfirmActionTool = {
   name: "la_confirm_action",
   title: "Confirm a prepared LimoAnywhere change",
-  description: `Step 2 of 2: performs a change previously prepared by la_prepare_reservation, la_prepare_reservation_update or la_prepare_note, identified by its token. Call this ONLY after the operator has seen the preview and explicitly said yes \u2014 it is the one tool that changes LimoAnywhere. Tokens are single-use and expire after ${PENDING_TTL_MINUTES} minutes; if the operator changed their mind or wants something different, prepare again instead.`,
+  description: `Step 2 of 2: performs a change previously prepared by la_prepare_reservation, la_prepare_quote, la_prepare_quote_conversion, la_prepare_reservation_update or la_prepare_note, identified by its token. Call this ONLY after the operator has seen the preview and explicitly said yes \u2014 it is the one tool that changes LimoAnywhere. Tokens are single-use and expire after ${PENDING_TTL_MINUTES} minutes; if the operator changed their mind or wants something different, prepare again instead.`,
   kind: "write",
   inputSchema: {
     token: external_exports.string().describe("The token from the prepare step's preview.")
@@ -27477,7 +28049,10 @@ var laConfirmActionTool = {
       if (!taken)
         return `Token ${token} was just used by another call. Nothing was done twice.`;
       const result = await executeAction(creds, taken.action);
-      return `**Done \u2014 ${actionHeadline(taken.action).toLowerCase()}.**
+      const headline = actionHeadline(taken.action);
+      const what = headline.charAt(0).toLowerCase() + headline.slice(1);
+      const head = result.outcome === "refused" ? `**Not done \u2014 ${what}.**` : result.outcome === "partial" ? `**Only partly done \u2014 ${what}. Read this before anything else.**` : `**Done \u2014 ${what}.**`;
+      return `${head}
 
 ${result.text}`;
     }, "make the change in");
@@ -27559,71 +28134,6 @@ ${TERMS_AND_CONDITIONS}
     ].join(" ");
   }
 };
-
-// dist/la/parseLists.js
-function parseQuoteRows(html) {
-  const root = parseLaHtml(html);
-  const rows = [];
-  for (const tr of root.querySelectorAll("tr")) {
-    const cells = tr.querySelectorAll("td.custListRow");
-    if (cells.length < 8)
-      continue;
-    const refNumber = cleanText(cells[0].text);
-    if (!/^\d{3,8}$/.test(refNumber))
-      continue;
-    const puDate = cleanText(cells[1].text);
-    const puTime = cleanText(cells[2].text);
-    const requestedText = cleanText(cells[7].text);
-    rows.push({
-      refNumber,
-      idQuote: tr.innerHTML.match(/menu(\d{5,})/)?.[1],
-      puDate,
-      puTime,
-      puAt: parseLaDate(puDate, puTime),
-      passenger: cleanText(cells[3].text).replace(/^,\s*/, ""),
-      vehicleType: cleanText(cells[4].text),
-      amount: parseMoney(cells[5].text),
-      phone: cleanText(cells[6].text),
-      requestedAt: parseLaDateTime(requestedText),
-      requestedText,
-      isNew: /font-weight:\s*bold/i.test(cells[0].getAttribute("style") ?? "")
-    });
-  }
-  return rows;
-}
-function parseReservationRows(html) {
-  const root = parseLaHtml(html);
-  const rows = [];
-  for (const tr of root.querySelectorAll("tr")) {
-    const cells = tr.querySelectorAll("td.custListRow");
-    if (cells.length < 9)
-      continue;
-    const confNumber = cleanText(cells[0].text);
-    if (!/^\d{3,8}$/.test(confNumber))
-      continue;
-    const link = tr.querySelector('a[href*="showResForm"]')?.getAttribute("href") ?? "";
-    const puDate = cleanText(cells[1].text);
-    const puTime = cleanText(cells[2].text);
-    const company = cleanText(cells[4].text);
-    const group = cells.length > 9 ? cleanText(cells[9].text) : "";
-    rows.push({
-      confNumber,
-      idTrip: link.match(/idTrip=(\d+)/)?.[1],
-      tripCode: link.match(/tripCode=([^&"]*)/)?.[1] || void 0,
-      puDate,
-      puTime,
-      puAt: parseLaDate(puDate, puTime),
-      passenger: cleanText(cells[3].text).replace(/^,\s*/, ""),
-      company: company === "N/A" ? void 0 : company || void 0,
-      vehicleType: cleanText(cells[5].text),
-      total: parseMoney(cells[6].text),
-      paymentType: cleanText(cells[7].text),
-      statusOrSubmitted: cleanText(cells[8].text),
-      groupName: group || void 0
-    });
-  }
-  return rows;
-}
 
 // dist/la/parseQuote.js
 function parseQuoteDetail(html) {
@@ -27747,113 +28257,6 @@ var laGetQuoteTool = {
   }
 };
 
-// dist/la/parseReservation.js
-function parseReservationDetail(html) {
-  const root = parseLaHtml(html);
-  const pairs = labelPairs(root);
-  const grandTotal = parseMoney(inputValue(root, "GrandTot"));
-  const paymentsDeposits = parseMoney(inputValue(root, "pmtDeposits"));
-  const totalDue = grandTotal !== void 0 ? Math.round((grandTotal - (paymentsDeposits ?? 0)) * 100) / 100 : void 0;
-  const first = inputValue(root, "passFName");
-  const last = inputValue(root, "passLName");
-  const bookedFirst = inputValue(root, "bookedFName");
-  const bookedLast = inputValue(root, "bookedLName");
-  return {
-    status: statusLabel(inputValue(root, "tripStatusOld")),
-    reservationState: inputValue(root, "reservationState"),
-    reservedAt: pairs.get("date/time"),
-    reservedBy: pairs.get("res. by"),
-    billingContact: inputValue(root, "contName"),
-    company: inputValue(root, "contCompany"),
-    bookedBy: [bookedFirst, bookedLast].filter(Boolean).join(" ") || void 0,
-    bookedByPhone: inputValue(root, "bookedContPhone"),
-    bookedByEmail: inputValue(root, "bookedContEmail"),
-    passengerName: [first, last].filter(Boolean).join(" ") || void 0,
-    passengerPhone: inputValue(root, "passPhone"),
-    passengerEmail: inputValue(root, "passEmail"),
-    groupName: inputValue(root, "tripGroupName"),
-    occasion: inputValue(root, "tripOcassion"),
-    clientRef: inputValue(root, "tripRefNumber"),
-    voucherNumber: inputValue(root, "tripVoucherNumber"),
-    puDate: inputValue(root, "tripPUDate"),
-    puTime: inputValue(root, "tripPUTime"),
-    doTime: inputValue(root, "tripDOTime"),
-    spotTime: inputValue(root, "tripSpotTime"),
-    durationHours: inputValue(root, "tripDuration"),
-    paxCount: inputValue(root, "tripPaxNumber"),
-    luggageCount: inputValue(root, "tripLuggageCount"),
-    serviceType: selectedOption(root, "svcCodeList"),
-    vehicleType: inputValue(root, "tripVehType"),
-    vehicleDisplay: selectedOption(root, "tripVehTypeList"),
-    routing: root.querySelectorAll(".textRoute").map((el) => cleanText(el.text)).filter(Boolean),
-    tripNotes: textareaValue(root, "newNotes"),
-    dispatchNotes: textareaValue(root, "tripDispatchNotes"),
-    partnerNotes: textareaValue(root, "tripPartnerNotes"),
-    paymentType: selectedOption(root, "tripPayType"),
-    currency: selectedOption(root, "tripCurrency"),
-    grandTotal,
-    paymentsDeposits,
-    totalDue,
-    driver: selectedOption(root, "idDriver"),
-    secondDriver: selectedOption(root, "idDriver2"),
-    car: selectedOption(root, "carList"),
-    rentalAgreement: selectedOption(root, "tripRentalAgrType")
-  };
-}
-
-// dist/la/reservations.js
-var RESERVATION_TABS = {
-  new: { stab: "newRes", action: "showResList1", label: "New Reservations" },
-  online: { stab: "onlineFarmin", action: "showEResList", label: "Online & eFarm-in" },
-  unfinalized: { stab: "unfinalizedRes", action: "showUnfList", label: "Unfinalized" },
-  deleted: { stab: "deletedRes", action: "showDeleted", label: "Deleted" }
-};
-async function fetchReservationRows(creds, query = {}) {
-  const tab = RESERVATION_TABS[query.tab ?? "new"];
-  const rows = [];
-  let page2 = 1;
-  for (; page2 <= MAX_LIST_PAGES; page2++) {
-    const html = await laFetch(creds, "/admin/manageRes.asp", {
-      query: {
-        stab: tab.stab,
-        action: tab.action,
-        searchFor: query.searchFor ?? "",
-        searchIn: query.searchIn ?? "",
-        dateFrom: query.dateFrom ? laDate(query.dateFrom) : "",
-        dateTo: query.dateTo ? laDate(query.dateTo) : "",
-        sortBy: query.sortBy ?? "tripPUDate",
-        sortOrder: query.sortOrder ?? "ASC",
-        pagesize: LIST_PAGE_SIZE,
-        pNum: page2
-      }
-    });
-    const pageRows = parseReservationRows(html);
-    rows.push(...pageRows);
-    if (pageRows.length < LIST_PAGE_SIZE)
-      return { rows, pagesFetched: page2, truncated: false };
-  }
-  return { rows, pagesFetched: page2 - 1, truncated: true };
-}
-async function fetchReservationDetail(creds, idTrip, tripCode) {
-  const html = await laFetch(creds, "/admin/manageRes.asp", {
-    query: { action: "showResForm", idTrip, tripCode: tripCode ?? "" }
-  });
-  return parseReservationDetail(html);
-}
-async function findReservationByConf(creds, confNumber) {
-  for (const tab of Object.keys(RESERVATION_TABS)) {
-    const { rows } = await fetchReservationRows(creds, {
-      tab,
-      searchFor: confNumber,
-      searchIn: "tripConfNumber"
-    });
-    const row = rows.find((r) => r.confNumber === confNumber);
-    if (row)
-      return { row, tab };
-  }
-  return void 0;
-}
-
 // dist/tools/limoanywhere/laGetReservation.js
 var laGetReservationTool = {
   name: "la_get_reservation",
@@ -27886,8 +28289,12 @@ var laGetReservationTool = {
       lines.push(`**Pickup:** ${cell(r.puDate)} at ${cell(r.puTime)}${r.doTime ? ` \xB7 **Drop-off time:** ${r.doTime}` : ""}${r.durationHours ? ` \xB7 **Duration:** ${r.durationHours}h` : ""}`);
       lines.push(`**Service:** ${cell(r.serviceType)} \xB7 **Vehicle:** ${cell(r.vehicleDisplay ?? r.vehicleType)}`);
       lines.push(`**Passengers:** ${cell(r.paxCount)} \xB7 **Luggage:** ${cell(r.luggageCount)}`);
-      if (r.routing.length > 0) {
-        lines.push("");
+      lines.push("");
+      if (r.routing === void 0) {
+        lines.push("**Routing:** couldn't be loaded from LimoAnywhere \u2014 open the reservation there to see the stops.");
+      } else if (r.routing.length === 0) {
+        lines.push("**Routing:** no stops entered yet.");
+      } else {
         lines.push("**Routing:**");
         for (const stop of r.routing)
           lines.push(`- ${stop}`);
@@ -28237,8 +28644,54 @@ var laListReservationsTool = {
   }
 };
 
+// dist/la/geocode.js
+function geocodeBody(stop) {
+  return {
+    name: null,
+    addressline1: stop.address.trim(),
+    address_line2: null,
+    city: stop.city.trim(),
+    statecode: stop.state.trim().toUpperCase(),
+    postalcode: stop.zip?.trim() || null,
+    countrycode: "US"
+  };
+}
+var same = (a, b) => (a ?? "").trim().toLowerCase() === b.trim().toLowerCase();
+function pickGeocode(text, stop) {
+  let hits;
+  try {
+    const parsed = JSON.parse(text);
+    hits = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    hits = [];
+  }
+  const where = `${stop.address}, ${stop.city}, ${stop.state.toUpperCase()}`;
+  if (hits.length === 0)
+    return { problem: `LimoAnywhere's map lookup couldn't find "${where}". Check the street and city.` };
+  if (hits.length > 1) {
+    return { problem: `"${where}" matches more than one place on LimoAnywhere's map (${hits.map((h) => h.Name).slice(0, 3).join("; ")}). Add the ZIP or a fuller street address.` };
+  }
+  const [hit] = hits;
+  const streetLevel = Boolean(hit.AddressLine1) && same(hit.City, stop.city) && same(hit.StateCode, stop.state);
+  if (!streetLevel || typeof hit.Latitude !== "number" || typeof hit.Longitude !== "number") {
+    return { problem: `LimoAnywhere's map lookup could only place "${where}" as "${hit.Name ?? "somewhere else"}", not at a street address. Check the street, city and state.` };
+  }
+  return { lat: String(hit.Latitude), lng: String(hit.Longitude), found: hit.Name ?? where };
+}
+async function geocodeStop(creds, stop) {
+  const text = await laFetch(creds, "/adminnew/get_geocode", { method: "POST", json: geocodeBody(stop) });
+  return pickGeocode(text, stop);
+}
+
 // dist/tools/limoanywhere/laWriteCommon.js
 var confNumberArg = external_exports.string().describe("The reservation's Conf #, e.g. 98175.");
+var stopSchema = external_exports.object({
+  label: external_exports.string().optional().describe("Short name shown on the trip sheet, e.g. 'Orlando Intl Airport' or 'Home'."),
+  address: external_exports.string().trim().min(1).describe("Street address line, e.g. '6000 Universal Blvd'."),
+  city: external_exports.string().trim().min(1),
+  state: external_exports.string().regex(/^[A-Za-z]{2}$/, "two-letter state").describe("Two-letter state, e.g. FL."),
+  zip: external_exports.string().optional()
+});
 function cleanConf(raw) {
   const conf = String(raw ?? "").trim().replace(/^#/, "");
   return /^\d{3,8}$/.test(conf) ? conf : void 0;
@@ -28289,6 +28742,16 @@ function notificationWarning(form) {
     return void 0;
   return `Heads-up: this reservation's confirmation / change-notification setting is not "Do Not Send", so LimoAnywhere itself may email or fax the customer when it is saved (Otto doesn't change that setting).`;
 }
+async function pinStops(creds, stops) {
+  const out = [];
+  for (const stop of stops) {
+    const g = await geocodeStop(creds, stop);
+    if ("problem" in g)
+      return { problem: `${g.problem} Nothing was prepared.` };
+    out.push({ ...stop, lat: g.lat, lng: g.lng, found: g.found });
+  }
+  return { stops: out };
+}
 function parkAction(action) {
   const pending = createPending(action);
   return renderPreview(action, pending.token, PENDING_TTL_MINUTES);
@@ -28338,44 +28801,32 @@ var laPrepareNoteTool = {
 };
 
 // dist/tools/limoanywhere/laPrepareReservation.js
-var stopSchema = external_exports.object({
-  label: external_exports.string().optional().describe("Short name shown on the trip sheet, e.g. 'Orlando Intl Airport' or 'Home'."),
-  address: external_exports.string().describe("Street address line, e.g. '6000 Universal Blvd'."),
-  city: external_exports.string(),
-  state: external_exports.string().regex(/^[A-Za-z]{2}$/, "two-letter state").describe("Two-letter state, e.g. FL."),
-  zip: external_exports.string().optional()
-});
 var isPast = (mmddyyyy) => {
   const [m, d, y] = mmddyyyy.split("/").map(Number);
   const today = /* @__PURE__ */ new Date();
   return new Date(y, m - 1, d) < new Date(today.getFullYear(), today.getMonth(), today.getDate());
 };
-var laPrepareReservationTool = {
-  name: "la_prepare_reservation",
-  title: "Prepare a new LimoAnywhere reservation",
-  description: "Step 1 of 2 for booking a NEW reservation in LimoAnywhere. Checks the details (vehicle and service names must match the operator's own LimoAnywhere dropdowns), then returns a preview and a one-time token \u2014 NOTHING is created until la_confirm_action is called with that token after the operator says yes. Never call la_confirm_action without the operator's explicit go-ahead on the preview. No confirmation email is sent; payment details are not taken.",
-  kind: "write",
-  inputSchema: {
-    passenger_first_name: external_exports.string(),
-    passenger_last_name: external_exports.string(),
-    pickup_date: external_exports.string().describe("Pickup date, e.g. 2026-12-15 or 12/15/2026."),
-    pickup_time: external_exports.string().describe("Pickup time, e.g. '10:00 AM' or 14:30."),
-    pickup: stopSchema.describe("Where the passenger is picked up."),
-    dropoff: stopSchema.optional().describe("Where the passenger is dropped off (omit for hourly/as-directed)."),
-    vehicle_type: external_exports.string().describe("Vehicle type as the operator names it, e.g. 'Business Class Sedan', 'Sprinter'."),
-    service_type: external_exports.string().describe("Service type, e.g. Point-to-Point, From Airport, To Airport, Hourly, Transfer."),
-    passengers: external_exports.number().int().min(1).max(99).optional().describe("Passenger count (default 1)."),
-    luggage: external_exports.number().int().min(0).max(99).optional(),
-    passenger_phone: external_exports.string().optional(),
-    passenger_email: external_exports.string().optional(),
-    billing_contact: external_exports.string().optional().describe("Name on the bill (defaults to the passenger)."),
-    company: external_exports.string().optional().describe("Company name for the bill, if any."),
-    flat_rate: external_exports.union([external_exports.number(), external_exports.string()]).optional().describe("Flat rate in dollars; fees the operator's rate table adds automatically are applied on top."),
-    trip_notes: external_exports.string().optional().describe("Notes for the trip (visible on the reservation)."),
-    hours: external_exports.number().min(0.5).max(24).optional().describe("Duration in hours for hourly/as-directed service (default 1).")
-  },
-  logArgs: (args) => ({ vehicle_type: args.vehicle_type, service_type: args.service_type }),
-  handler: ({ cfg }, args) => runLaTool(cfg, async (creds) => {
+var createInputSchema = {
+  passenger_first_name: external_exports.string(),
+  passenger_last_name: external_exports.string(),
+  pickup_date: external_exports.string().describe("Pickup date, e.g. 2026-12-15 or 12/15/2026."),
+  pickup_time: external_exports.string().describe("Pickup time, e.g. '10:00 AM' or 14:30."),
+  pickup: stopSchema.describe("Where the passenger is picked up."),
+  dropoff: stopSchema.optional().describe("Where the passenger is dropped off (omit for hourly/as-directed)."),
+  vehicle_type: external_exports.string().describe("Vehicle type as the operator names it, e.g. 'Business Class Sedan', 'Sprinter'."),
+  service_type: external_exports.string().describe("Service type, e.g. Point-to-Point, From Airport, To Airport, Hourly, Transfer."),
+  passengers: external_exports.number().int().min(1).max(99).optional().describe("Passenger count (default 1)."),
+  luggage: external_exports.number().int().min(0).max(99).optional(),
+  passenger_phone: external_exports.string().optional(),
+  passenger_email: external_exports.string().optional(),
+  billing_contact: external_exports.string().optional().describe("Name on the bill (defaults to the passenger)."),
+  company: external_exports.string().optional().describe("Company name for the bill, if any."),
+  flat_rate: external_exports.union([external_exports.number(), external_exports.string()]).optional().describe("Flat rate in dollars; fees the operator's rate table adds automatically are applied on top."),
+  trip_notes: external_exports.string().optional().describe("Notes for the trip (visible on the reservation)."),
+  hours: external_exports.number().min(0.5).max(24).optional().describe("Duration in hours for hourly/as-directed service (default 1).")
+};
+function prepareCreateHandler(quote) {
+  return ({ cfg }, args) => runLaTool(cfg, async (creds) => {
     const first = String(args.passenger_first_name ?? "").trim();
     const last = String(args.passenger_last_name ?? "").trim();
     if (!first || !last)
@@ -28405,8 +28856,10 @@ var laPrepareReservationTool = {
     const service = resolveChoice(ref.options("svcCodeList"), String(args.service_type ?? ""), "the service type");
     if ("problem" in service)
       return service.problem;
-    const pickup = args.pickup;
-    const dropoff = args.dropoff;
+    const pinned = await pinStops(creds, [args.pickup, ...args.dropoff ? [args.dropoff] : []]);
+    if ("problem" in pinned)
+      return pinned.problem;
+    const [pickup, dropoff] = pinned.stops;
     const pax = String(args.passengers ?? 1);
     const billing = String(args.billing_contact ?? "").trim() || `${first} ${last}`;
     const fieldChanges = {
@@ -28449,13 +28902,95 @@ var laPrepareReservationTool = {
       summary.push(`Drop-off: none (${describeStop(pickup)} only)`);
     if (isPast(puDate))
       summary.push("Note: that pickup date is already in the past.");
+    if (quote)
+      summary.unshift("This is a QUOTE (Manage Quotes), not a booking \u2014 nothing goes on the calendar.");
+    summary.push("Mileage charges LimoAnywhere's page adds by itself are NOT applied \u2014 check the price in LimoAnywhere afterwards.");
     const action = {
       kind: "create_reservation",
+      quote,
       fieldChanges,
       flatRate,
       pickup,
       dropoff,
       summary
+    };
+    return parkAction(action);
+  }, "prepare a change in");
+}
+var laPrepareReservationTool = {
+  name: "la_prepare_reservation",
+  title: "Prepare a new LimoAnywhere reservation",
+  description: "Step 1 of 2 for booking a NEW reservation in LimoAnywhere. Checks the details (vehicle and service names must match the operator's own LimoAnywhere dropdowns), then returns a preview and a one-time token \u2014 NOTHING is created until la_confirm_action is called with that token after the operator says yes. Never call la_confirm_action without the operator's explicit go-ahead on the preview. No confirmation email is sent; payment details are not taken.",
+  kind: "write",
+  inputSchema: createInputSchema,
+  logArgs: (args) => ({ vehicle_type: args.vehicle_type, service_type: args.service_type }),
+  handler: prepareCreateHandler(false)
+};
+
+// dist/tools/limoanywhere/laPrepareQuote.js
+var laPrepareQuoteTool = {
+  name: "la_prepare_quote",
+  title: "Prepare a new LimoAnywhere quote",
+  description: "Step 1 of 2 for putting a NEW QUOTE into LimoAnywhere (Manage Quotes) \u2014 a priced trip the customer hasn't booked yet; it goes nowhere near the calendar. Same details as a reservation: passenger, pickup date/time and address, vehicle and service type (matched against the operator's own dropdowns), optional drop-off and flat rate. Returns a preview and a one-time token \u2014 NOTHING is created until la_confirm_action is called with that token after the operator says yes. Nothing is sent to the customer. To book the trip outright, use la_prepare_reservation instead.",
+  kind: "write",
+  inputSchema: createInputSchema,
+  logArgs: (args) => ({ vehicle_type: args.vehicle_type, service_type: args.service_type }),
+  handler: prepareCreateHandler(true)
+};
+
+// dist/tools/limoanywhere/laPrepareQuoteConversion.js
+var SEND_LABELS = { NA: "Do Not Send", "": "Do Not Send", EML: "Email", FAX: "Fax", CALL: "Call To Confirm" };
+var sendLabel = (code) => SEND_LABELS[code] ?? code;
+var laPrepareQuoteConversionTool = {
+  name: "la_prepare_quote_conversion",
+  title: "Prepare converting a LimoAnywhere quote into a reservation",
+  description: "Step 1 of 2 for turning a QUOTE into a reservation \u2014 what LimoAnywhere's \"Convert to:\" menu does. `live` (default) makes it a live reservation on New Reservations; `unfinalized` puts it on the Unfinalized tab to finish later. The trip keeps its details, price and stops, and its Ref # becomes the Conf #. Returns a preview and a one-time token \u2014 NOTHING changes until la_confirm_action is called with that token after the operator says yes. Otto can't undo a conversion, so never confirm without their explicit go-ahead.",
+  kind: "write",
+  inputSchema: {
+    quote_number: external_exports.string().describe("The quote's Ref # as shown in la_list_quotes, e.g. 98408."),
+    to: external_exports.enum(["live", "unfinalized"]).optional().describe("live (default) = a live reservation; unfinalized = the Unfinalized tab.")
+  },
+  logArgs: (args) => ({ quote_number: args.quote_number, to: args.to }),
+  handler: ({ cfg }, args) => runLaTool(cfg, async (creds) => {
+    const ref = String(args.quote_number ?? "").trim().replace(/^#/, "");
+    if (!/^\d{3,8}$/.test(ref))
+      return "Give me the quote's Ref # (a number like 98408) from la_list_quotes.";
+    const to = args.to === "unfinalized" ? "unf" : "live";
+    const row = await findQuoteByNumber(creds, ref);
+    if (!row) {
+      return `No quote with Ref # ${ref} is on the Manage Quotes screen (among the most recent quotes). A quote that was already converted leaves that screen \u2014 check la_list_reservations.`;
+    }
+    if (!row.idQuote)
+      return `Quote #${ref} exists but its link couldn't be read \u2014 LimoAnywhere may have changed its layout. Convert it in LimoAnywhere directly.`;
+    const form = await loadReservationForm(creds, row.idQuote, "");
+    if (form.confNumber !== ref) {
+      return `Otto opened a different record (${form.confNumber ? `#${form.confNumber}` : "no number"}) than quote Ref #${ref}, so it stopped. Convert it in LimoAnywhere directly.`;
+    }
+    if (!form.isQuote) {
+      return `Ref #${ref} is no longer a quote in LimoAnywhere (it's ${form.resStatus ?? "something else"} now), so there's nothing to convert.`;
+    }
+    const f = (name) => fieldValue(form.fields, name) ?? "";
+    let route = "";
+    try {
+      route = (await loadRoutingStops(creds, form)).map((s) => s.text).join(" \u2192 ");
+    } catch {
+      route = "(couldn't read the stops)";
+    }
+    const action = {
+      kind: "convert_quote",
+      refNumber: ref,
+      idTrip: form.idTrip,
+      tripCode: form.tripCode,
+      to,
+      summary: [
+        `Passenger: ${`${f("passFName")} ${f("passLName")}`.trim() || "\u2014"}${f("passPhone") ? ` \xB7 ${f("passPhone")}` : ""}`,
+        `Pickup: ${f("tripPUDate") || "\u2014"} at ${f("tripPUTime") || "\u2014"} \xB7 ${f("tripsvcCode") || "\u2014"} \xB7 ${f("tripVehType") || "\u2014"}`,
+        `Route: ${route || "no stops entered"}`,
+        `Quoted total: $${f("GrandTot") || "0.00"}`,
+        `LimoAnywhere's own send settings on this trip: confirmation ${sendLabel(f("tripConfirm"))}, change notification ${sendLabel(f("tripNotify"))}${f("passEmail") ? `; passenger email ${f("passEmail")}` : "; no passenger email"}. Otto sends nothing itself; it hasn't been tested whether converting makes LimoAnywhere send anything.`,
+        to === "live" ? `Becomes live reservation #${ref} on New Reservations (same number, same details).` : `Becomes an unfinalized reservation #${ref} on the Unfinalized tab (same number, same details).`,
+        "Otto can't undo a conversion."
+      ]
     };
     return parkAction(action);
   }, "prepare a change in")
@@ -28465,7 +29000,7 @@ var laPrepareReservationTool = {
 var laPrepareReservationUpdateTool = {
   name: "la_prepare_reservation_update",
   title: "Prepare changes to a LimoAnywhere reservation",
-  description: "Step 1 of 2 for changing an EXISTING reservation: dispatch status (e.g. Assigned, Cancelled, Done, No Show), driver and car, pickup date/time, passenger count, vehicle or service type, flat rate, passenger phone/email, or the dispatch notes. Give only the fields to change. Returns a preview and a one-time token \u2014 NOTHING changes until la_confirm_action is called with that token after the operator says yes. Never confirm without their explicit go-ahead. To add a note without touching anything else, use la_prepare_note instead.",
+  description: "Step 1 of 2 for changing an EXISTING reservation: dispatch status (e.g. Assigned, Cancelled, Done, No Show), driver and car, pickup date/time, passenger count, vehicle or service type, flat rate, passenger phone/email, the dispatch notes, or the route (a new pickup or drop-off address, or an extra stop). Give only the fields to change. Returns a preview and a one-time token \u2014 NOTHING changes until la_confirm_action is called with that token after the operator says yes. Never confirm without their explicit go-ahead. To add a note without touching anything else, use la_prepare_note instead.",
   kind: "write",
   inputSchema: {
     confirmation_number: confNumberArg,
@@ -28480,7 +29015,10 @@ var laPrepareReservationUpdateTool = {
     flat_rate: external_exports.union([external_exports.number(), external_exports.string()]).optional().describe("New flat rate in dollars."),
     passenger_phone: external_exports.string().optional(),
     passenger_email: external_exports.string().optional(),
-    dispatch_notes: external_exports.string().optional().describe("Replaces the dispatch notes (driver-facing).")
+    dispatch_notes: external_exports.string().optional().describe("Replaces the dispatch notes (driver-facing)."),
+    pickup: stopSchema.optional().describe("New pickup address \u2014 replaces the current pickup stop."),
+    dropoff: stopSchema.optional().describe("New drop-off address \u2014 replaces the current drop-off stop."),
+    add_stop: stopSchema.optional().describe("An extra stop along the way, added before the drop-off.")
   },
   logArgs: (args) => ({ confirmation_number: args.confirmation_number, status: args.status }),
   handler: ({ cfg }, args) => runLaTool(cfg, async (creds) => {
@@ -28491,6 +29029,9 @@ var laPrepareReservationUpdateTool = {
     if ("problem" in located)
       return located.problem;
     const { form } = located;
+    if (form.editLocked) {
+      return `Reservation #${conf} is settled or locked for editing in LimoAnywhere, so Otto won't change it. Reopen it in LimoAnywhere first if it needs changes.`;
+    }
     const changes = {};
     const summary = [];
     const before = (name) => fieldValue(form.fields, name) ?? "";
@@ -28575,8 +29116,12 @@ var laPrepareReservationUpdateTool = {
       changes.tripDispatchNotes = String(args.dispatch_notes).trim();
       summary.push(`Dispatch notes \u2192 "${changes.tripDispatchNotes}"`);
     }
+    const route = await prepareStops(creds, form, args);
+    if ("problem" in route)
+      return route.problem;
+    summary.push(...route.lines);
     if (summary.length === 0)
-      return "Tell me what to change on this reservation (status, driver, car, pickup date/time, passengers, vehicle, service, flat rate, phone, email, or dispatch notes).";
+      return "Tell me what to change on this reservation (status, driver, car, pickup date/time, passengers, vehicle, service, flat rate, phone, email, dispatch notes, or the pickup / drop-off / an extra stop).";
     const dry = dryRunSave(form, changes, flatRate);
     if (dry)
       return dry;
@@ -28590,6 +29135,7 @@ var laPrepareReservationUpdateTool = {
       tripCode: form.tripCode,
       fieldChanges: changes,
       flatRate,
+      ...route.changes.length > 0 ? { stopChanges: route.changes, routeBefore: route.before } : {},
       summary: [
         `Reservation #${conf} \u2014 ${before("passFName")} ${before("passLName")}, pickup ${before("tripPUDate")} ${before("tripPUTime")}`,
         ...summary
@@ -28598,6 +29144,23 @@ var laPrepareReservationUpdateTool = {
     return parkAction(action);
   }, "prepare a change in")
 };
+var STOP_WORD = { PU: "Pickup", DO: "Drop-off", ST: "Stop", WT: "Wait" };
+async function prepareStops(creds, form, args) {
+  const req = { pickup: args.pickup, dropoff: args.dropoff, addStop: args.add_stop };
+  if (!req.pickup && !req.dropoff && !req.addStop)
+    return { changes: [], before: [], lines: [] };
+  const before = await loadRoutingStops(creds, form);
+  const plan = planStopChanges(before, req);
+  if ("problem" in plan)
+    return plan;
+  const pinned = await pinStops(creds, plan.changes.map((c) => c.stop));
+  if ("problem" in pinned)
+    return pinned;
+  const changes = plan.changes.map((c, i) => ({ ...c, stop: pinned.stops[i] }));
+  const lines = changes.map((c) => c.op === "edit" ? `${STOP_WORD[c.type]}: ${c.was.replace(/^[A-Z]{2}:\s*/, "")} \u2192 ${describePinnedStop(c.stop)}` : `Add ${STOP_WORD[c.type].toLowerCase()}: ${describePinnedStop(c.stop)}${c.type === "ST" ? " (before the drop-off)" : ""}`);
+  lines.push("Mileage and extra-stop charges are NOT recalculated for the new route \u2014 check the price in LimoAnywhere afterwards.");
+  return { changes, before, lines };
+}
 
 // dist/tools/limoanywhere/laQuoteConversionReport.js
 function nameTokens(name) {
@@ -28798,6 +29361,8 @@ var LA_TOOLS = [
 ];
 var LA_WRITE_TOOLS = [
   laPrepareReservationTool,
+  laPrepareQuoteTool,
+  laPrepareQuoteConversionTool,
   laPrepareReservationUpdateTool,
   laPrepareNoteTool,
   laConfirmActionTool

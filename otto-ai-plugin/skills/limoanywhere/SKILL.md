@@ -34,7 +34,10 @@ doesn't, stay on the operations side rather than guessing at marketing data.
 | "Which quotes did we lose?" | `la_quote_conversion_report` |
 | "How much is booked this month / next month?" | `la_revenue_summary` |
 | "Book a trip for…" / "Put in a reservation" | `la_prepare_reservation`, then `la_confirm_action` |
+| "Quote Sarah a Sprinter to MCO on the 16th" / "Put in a quote" | `la_prepare_quote`, then `la_confirm_action` |
+| "Sarah accepted — book quote 98408" / "Convert that quote" | `la_prepare_quote_conversion`, then `la_confirm_action` |
 | "Assign Juan to 98175" / "Cancel 98175" / "Move it to 3pm" | `la_prepare_reservation_update`, then `la_confirm_action` |
+| "Pickup on 98175 is now the Marriott" / "Add a stop at Disney Springs" | `la_prepare_reservation_update` (`pickup` / `dropoff` / `add_stop`), then `la_confirm_action` |
 | "Add a note to 98175: gate code 1234" | `la_prepare_note`, then `la_confirm_action` |
 | Setup or something's broken | `la_check_connection` |
 
@@ -112,11 +115,37 @@ Three things Otto can change, each in two steps:
   LimoAnywhere dropdowns, so "Sprinter" or "business class sedan" both work; if
   a name doesn't match, the tool lists the real choices — pick with the operator
   rather than guessing.
+- **Create a quote** — `la_prepare_quote`. Same details as a new reservation,
+  but it lands on **Manage Quotes**, not the calendar: a priced trip the customer
+  hasn't booked. Use it when the operator says "quote", "price it", or the
+  customer is still deciding; use `la_prepare_reservation` when they're booking.
+  If it's unclear, ask. A quote usually needs a price — ask for the flat rate if
+  they didn't give one. Nothing is sent to the customer; the operator responds
+  to the quote in LimoAnywhere.
+- **Convert a quote into a reservation** — `la_prepare_quote_conversion` with the
+  quote's Ref # (from `la_list_quotes`). `live` (default) makes it a live
+  reservation; `unfinalized` puts it on the Unfinalized tab to finish later —
+  use that when the customer said yes but details are still open. The trip keeps
+  its details, price and stops, and the Ref # becomes the Conf #. Otto can't
+  undo a conversion, so be sure it's the right quote: read the preview back
+  (passenger, date, route, total). If the quote was already converted, say so
+  and look it up with `la_list_reservations`.
 - **Change an existing reservation** — `la_prepare_reservation_update`. Status
   (Assigned, Cancelled, Late Cancel, No Show, Done…), driver, car, pickup date
   or time, passengers, vehicle, service, flat rate, passenger phone/email, or
   the dispatch notes. Give only what changes. Cancelling a trip is a status
   change to Cancelled — Otto never deletes reservations.
+  It can also change the **route**: a new pickup or drop-off address (replaces
+  the current one) or an extra stop (goes in before the drop-off). A changed
+  stop keeps its phone, notes and special instructions; only the address is
+  replaced. It edits
+  street-address stops only — an airport/flight stop, or a trip with two
+  pickups, is refused; send the operator to LimoAnywhere for those. Otto can't
+  remove a stop yet. LimoAnywhere's mileage and extra-stop charges are **not**
+  recalculated for a new route — the preview says so; tell the operator to
+  check the price. If the route changed in LimoAnywhere between the preview and
+  the yes, the confirm is refused — prepare again. Settled or locked
+  reservations can't be changed at all.
 - **Add a note** — `la_prepare_note`. Appends a trip note (optionally hidden
   from the customer) or replaces the driver-facing dispatch notes, without
   touching anything else on the trip.
@@ -141,7 +170,8 @@ Tokens are single-use and expire after 15 minutes, so a stale approval can't
 fire later. If a token is refused, prepare again and show the new preview.
 
 What Otto deliberately does **not** do in LimoAnywhere: delete reservations,
-take or record payments, convert quotes, accept online bookings, or send
+take or record payments, respond to quotes (it can create and convert them),
+accept online bookings, or send
 confirmation emails and texts (a new reservation is saved with "Do Not Send",
 and the operator sends the confirmation from LimoAnywhere when they're ready).
 Say so plainly and point them to LimoAnywhere for those.

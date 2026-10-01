@@ -68,5 +68,40 @@ next step if anything is broken. Common cases:
 - *GoHighLevel (if connected) asks them to sign in* → the connector's
   authorization expired. Reconnect it in Claude's connector settings.
 
-If everything is healthy, say so briefly and suggest one thing they could ask
-next.
+If LimoAnywhere is connected, finish the report with **What you can ask Otto**:
+the list below, in plain language, with the example prompts. Keep the grouping
+and the examples; adapt the names and places to the operator's business when
+you know them (their own vehicles, airports, Conf #s from this session). Skip
+the list when LimoAnywhere isn't connected — the fix comes first.
+
+The tool names in brackets are for you, not the operator — don't show them.
+
+### What you can ask Otto
+
+**Look things up** (read-only — nothing in LimoAnywhere changes)
+
+| What | Try asking |
+|---|---|
+| The calendar [`la_get_schedule`] | "What jobs are on the calendar today?" · "What's booked this weekend?" |
+| Quote requests [`la_list_quotes`, `la_get_quote`] | "How many quotes came in yesterday?" · "Any quotes over $1,000 nobody has answered?" · "Show me quote 98394." |
+| Reservations [`la_list_reservations`, `la_get_reservation`] | "Pull up reservation 98175." · "Any cancellations this week?" · "Any online bookings we haven't accepted?" |
+| Reports [`la_quote_conversion_report`, `la_revenue_summary`] | "Which quotes from last week never turned into bookings?" · "How much is booked for next month?" |
+
+**Make changes** (Otto shows a preview first — nothing changes until you say yes)
+
+| What | Try asking |
+|---|---|
+| Book a reservation [`la_prepare_reservation`] | "Book Maria Lopez in a Sprinter from MCO to the Hyatt Regency Orlando on Dec 15 at 10am, $250 flat." |
+| Create a quote [`la_prepare_quote`] | "Quote John Smith an SUV from Universal Studios to MCO on the 20th at 3pm, $140." |
+| Turn a quote into a booking [`la_prepare_quote_conversion`] | "John accepted — convert quote 98410 into a reservation." · "Move quote 98410 to Unfinalized." |
+| Change a reservation [`la_prepare_reservation_update`] | "Assign Juan and the Suburban to 98175." · "Cancel 98175." · "Move 98175 to 3pm." · "Make 98175 four passengers." |
+| Change the route [`la_prepare_reservation_update`] | "The pickup for 98175 is now the Marriott on International Drive." · "Add a stop at Disney Springs before the drop-off." |
+| Add a note [`la_prepare_note`] | "Add a note to 98175: gate code 1234 — hide it from the customer." · "Tell the driver on 98175 to call on arrival." |
+
+Every change is confirmed with `la_confirm_action` only after the operator says
+yes to the preview. Say it in one line: *Otto always shows you the change
+first, and never emails or texts your customers.*
+
+**What Otto won't do** — do these in LimoAnywhere directly: delete reservations
+or quotes (cancelling is fine), take payments, email or text customers, respond
+to quotes, or accept online bookings.

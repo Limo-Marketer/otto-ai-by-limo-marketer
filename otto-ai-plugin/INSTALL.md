@@ -250,8 +250,8 @@ If you're working on this rather than only testing it:
   writes funnel through `laWrite` (`writeClient.ts`), whose separate allowlist
   names the exact handlers the gated write tools replay. `npm test` and
   `npm run smoke:la` audit both.
-- `src/tools/limoanywhere/` — the eight `la_*` read tools, the four gated
-  write tools (`la_prepare_reservation`, `la_prepare_reservation_update`,
+- `src/tools/limoanywhere/` — the eight `la_*` read tools, the six gated
+  write tools (`la_prepare_reservation`, `la_prepare_quote`, `la_prepare_quote_conversion`, `la_prepare_reservation_update`,
   `la_prepare_note`, `la_confirm_action`), plus the three setup tools (`la_connect_start`, `la_connect`, `la_update` — self-update lives in
   the server because it's the only part of the plugin that always runs on the
   operator's host; see `src/la/update.ts`).
